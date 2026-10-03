@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FileText, Check, AlertCircle } from 'lucide-react';
 import { copyToClipboard } from '../../utils/formatters';
+import { useToast } from '../../context/ToastContext';
 
 interface CopyReportButtonProps {
   reportText: string;
@@ -17,6 +18,7 @@ export const CopyReportButton: React.FC<CopyReportButtonProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
+  const toast = useToast();
 
   const handleCopyReport = async () => {
     if (!reportText || !reportText.trim()) return;
@@ -24,9 +26,11 @@ export const CopyReportButton: React.FC<CopyReportButtonProps> = ({
     const success = await copyToClipboard(reportText.trim());
     if (success) {
       setCopied(true);
+      toast.success(referenceNumber ? `Full Report #${referenceNumber} copied to clipboard!` : 'Full report copied to clipboard!');
       setTimeout(() => setCopied(false), 2500);
     } else {
       setFailed(true);
+      toast.error('Failed to copy full report');
       setTimeout(() => setFailed(false), 2500);
     }
   };

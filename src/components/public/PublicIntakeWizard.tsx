@@ -7,6 +7,9 @@ import {
 import { PersonalInformationForm } from '../form/PersonalInformationForm';
 import { FileUploadDropzone } from '../form/FileUploadDropzone';
 import { CopyButton } from '../common/CopyButton';
+import { BrandLogo } from '../common/BrandLogo';
+import { BackgroundWatermark } from '../common/BackgroundWatermark';
+import { PWAInstallButton } from '../common/PWAInstallButton';
 import { generateReferenceNumber } from '../../utils/referenceNumber';
 import { formatHumanDate } from '../../utils/dateUtils';
 import { 
@@ -148,37 +151,35 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
+    <div className="relative min-h-screen bg-slate-100 flex flex-col font-sans overflow-x-hidden">
+      {/* Resilient Official Seal Watermark */}
+      <BackgroundWatermark theme="light" />
+
       {/* Official Top Agency Header */}
-      <header className="bg-blue-950 text-white shadow-md sticky top-0 z-30 border-b border-blue-900">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-900 border border-blue-600 flex items-center justify-center shadow-inner">
-              <Shield className="w-5 h-5 text-amber-400" />
-            </div>
-            <div>
-              <h1 className="text-sm sm:text-base font-extrabold tracking-tight leading-tight">
-                PERSONAL INFORMATION INTAKE
+      <header className="relative z-30 bg-blue-950 text-white shadow-md sticky top-0 border-b border-blue-900">
+        <div className="max-w-3xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <BrandLogo size="sm" />
+            <div className="min-w-0">
+              <h1 className="text-xs sm:text-base font-extrabold tracking-tight leading-tight truncate">
+                BAUAN MPS - INTAKE
               </h1>
-              <p className="text-[11px] text-blue-200">
-                Pambansang Pulisya • Pagtatala ng Impormasyon ng Mamamayan
+              <p className="text-[10px] sm:text-[11px] text-blue-200 truncate">
+                Public Records Portal
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-300 bg-blue-900/80 px-2.5 py-1 rounded-full border border-blue-700">
-              <Lock className="w-3 h-3 text-emerald-400" />
-              <span>Encrypted</span>
-            </span>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <PWAInstallButton />
             {onNavigateToAdmin && (
               <button
                 type="button"
                 onClick={onNavigateToAdmin}
-                className="text-xs text-blue-200 hover:text-white px-2.5 py-1 rounded hover:bg-blue-900 transition-colors cursor-pointer"
+                className="text-xs text-blue-200 hover:text-white px-2 py-1 rounded hover:bg-blue-900 transition-colors border border-blue-800 cursor-pointer"
                 title="Officer Portal"
               >
-                Admin Area
+                Admin
               </button>
             )}
           </div>
@@ -186,7 +187,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
       </header>
 
       {/* Main Container */}
-      <main className="flex-1 max-w-3xl w-full mx-auto p-4 sm:p-6 pb-24">
+      <main className="relative z-10 flex-1 max-w-3xl w-full mx-auto p-4 sm:p-6 pb-24">
         {/* Step Indicator Header (Steps 1 & 2) */}
         {currentStep < 3 && (
           <div className="mb-6 bg-white rounded-xl p-4 sm:p-5 border border-slate-200 shadow-xs">
@@ -392,11 +393,11 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
             </div>
 
             {/* Submission Actions */}
-            <div className="flex items-center justify-between gap-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 pt-2">
               <button
                 type="button"
                 onClick={handleBackToEdit}
-                className="inline-flex items-center gap-1.5 px-5 py-3 text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 text-sm font-semibold shadow-xs cursor-pointer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2.5 sm:py-3 text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 text-xs sm:text-sm font-semibold shadow-xs cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
                 <span>Bumalik (Edit)</span>
@@ -404,7 +405,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
               <button
                 type="button"
                 onClick={() => setShowConfirmModal(true)}
-                className="inline-flex items-center gap-2 px-8 py-3.5 text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl text-sm font-extrabold shadow-md active:scale-[0.98] cursor-pointer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3 sm:py-3.5 text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl text-xs sm:text-sm font-extrabold shadow-md active:scale-[0.98] cursor-pointer"
               >
                 <Send className="w-4 h-4" />
                 <span>[SUBMIT PERSONAL INFO]</span>

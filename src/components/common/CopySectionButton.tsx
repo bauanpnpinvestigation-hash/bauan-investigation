@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Copy, Check, AlertCircle } from 'lucide-react';
 import { copyToClipboard } from '../../utils/formatters';
+import { useToast } from '../../context/ToastContext';
 
 interface CopySectionButtonProps {
   sectionTitle: string;
@@ -15,6 +16,7 @@ export const CopySectionButton: React.FC<CopySectionButtonProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
+  const toast = useToast();
 
   const handleCopySection = async () => {
     if (!formattedText || !formattedText.trim()) return;
@@ -22,9 +24,11 @@ export const CopySectionButton: React.FC<CopySectionButtonProps> = ({
     const success = await copyToClipboard(formattedText.trim());
     if (success) {
       setCopied(true);
+      toast.success(`Copied section "${sectionTitle}" to clipboard`);
       setTimeout(() => setCopied(false), 2000);
     } else {
       setFailed(true);
+      toast.error(`Failed to copy section "${sectionTitle}"`);
       setTimeout(() => setFailed(false), 2500);
     }
   };

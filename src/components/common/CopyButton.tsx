@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Copy, Check, AlertCircle } from 'lucide-react';
 import { copyToClipboard } from '../../utils/formatters';
+import { useToast } from '../../context/ToastContext';
 
 interface CopyButtonProps {
   value?: string | number | null;
@@ -19,6 +20,7 @@ export const CopyButton: React.FC<CopyButtonProps> = ({
 }) => {
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const [showMenu, setShowMenu] = useState(false);
+  const toast = useToast();
 
   const stringValue = value !== null && value !== undefined ? String(value).trim() : '';
   const isEmpty = stringValue.length === 0;
@@ -30,9 +32,11 @@ export const CopyButton: React.FC<CopyButtonProps> = ({
     const success = await copyToClipboard(stringValue);
     if (success) {
       setCopyState('copied');
+      toast.success(label ? `Copied ${label} to clipboard` : 'Copied to clipboard');
       setTimeout(() => setCopyState('idle'), 2000);
     } else {
       setCopyState('error');
+      toast.error('Failed to copy to clipboard');
       setTimeout(() => setCopyState('idle'), 2500);
     }
     setShowMenu(false);
@@ -46,9 +50,11 @@ export const CopyButton: React.FC<CopyButtonProps> = ({
     const success = await copyToClipboard(textToCopy);
     if (success) {
       setCopyState('copied');
+      toast.success(`Copied ${label} with details to clipboard`);
       setTimeout(() => setCopyState('idle'), 2000);
     } else {
       setCopyState('error');
+      toast.error('Failed to copy to clipboard');
       setTimeout(() => setCopyState('idle'), 2500);
     }
     setShowMenu(false);

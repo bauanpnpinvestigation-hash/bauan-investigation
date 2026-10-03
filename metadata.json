@@ -1,6 +1,6 @@
 {
-  "name": "Secure Intake & Incident Report System",
-  "description": "Authorized public intake portal and administrator investigation dashboard for secure incident reports, complaints, and official police requests.",
+  "name": "Bauan MPS Investigation Section",
+  "description": "Authorized public intake portal and administrator investigation dashboard for secure incident reports, complaints, and official police requests at Bauan MPS.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

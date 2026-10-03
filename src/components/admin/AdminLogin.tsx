@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Shield, Lock, AlertCircle, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { signInAdminWithPassword, AUTHORIZED_ADMIN_EMAIL, auth } from '../../services/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { BrandLogo } from '../common/BrandLogo';
+import { BackgroundWatermark } from '../common/BackgroundWatermark';
 
 interface AdminLoginProps {
   onLoginSuccess: (email: string) => void;
@@ -48,20 +50,23 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-950 border-2 border-blue-600 shadow-xl mb-4">
-          <Shield className="w-8 h-8 text-amber-400" />
+    <div className="relative min-h-screen bg-slate-900 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans overflow-x-hidden">
+      {/* Resilient Official Seal Background Watermark */}
+      <BackgroundWatermark theme="dark" />
+
+      <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md text-center">
+        <div className="flex justify-center mb-4">
+          <BrandLogo size="xl" />
         </div>
-        <h2 className="text-2xl font-black text-white tracking-tight">
-          POLICE INVESTIGATION & RECORDS
+        <h2 className="text-2xl font-black text-white tracking-tight uppercase">
+          BAUAN MPS - INVESTIGATION SECTION
         </h2>
         <p className="mt-1 text-xs font-semibold text-blue-300 uppercase tracking-widest">
           Secure Officer Login
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+      <div className="relative z-10 mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-slate-800/90 border border-slate-700 py-8 px-6 shadow-2xl rounded-2xl sm:px-10 backdrop-blur-md space-y-6">
           {errorMsg && (
             <div className="p-3 bg-rose-500/15 border border-rose-500/40 rounded-xl text-xs text-rose-300 flex items-start gap-2">

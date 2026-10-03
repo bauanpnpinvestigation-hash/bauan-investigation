@@ -262,6 +262,7 @@ export const PersonalInformationForm: React.FC<PersonalInformationFormProps> = (
           labelEn="Occupation"
           labelFil="Trabaho"
           required
+          helpText="Type any occupation freely. You can enter any custom job not in the suggestions list."
           error={errors.occupation}
         >
           <div className="relative">
@@ -271,7 +272,7 @@ export const PersonalInformationForm: React.FC<PersonalInformationFormProps> = (
               list="occupation-suggestions"
               value={data.occupation || ''}
               onChange={(e) => handleChange('occupation', e.target.value)}
-              placeholder="e.g. Driver, Private Employee, Businessman"
+              placeholder="e.g. Driver, Private Employee, Businessman, Freelancer"
               className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-colors shadow-xs"
             />
             <Briefcase className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />

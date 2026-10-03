@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1e3a8a"/>
+      <stop offset="100%" stop-color="#09132b"/>
+    </radialGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="50%" stop-color="#eab308"/>
+      <stop offset="100%" stop-color="#ca8a04"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bgGlow)"/>
+  <circle cx="256" cy="256" r="220" fill="none" stroke="url(#goldGrad)" stroke-width="10"/>
+  <circle cx="256" cy="256" r="206" fill="none" stroke="#3b82f6" stroke-width="3" stroke-dasharray="8 6"/>
+  <!-- Police Shield -->
+  <path d="M 256,96 L 376,144 C 376,280 256,384 256,416 C 256,384 136,280 136,144 Z" fill="#0f172a" stroke="url(#goldGrad)" stroke-width="12" stroke-linejoin="round"/>
+  <!-- Shield Emblem Core -->
+  <path d="M 256,126 L 350,164 C 350,270 256,350 256,378 C 256,350 162,270 162,164 Z" fill="#1e293b"/>
+  <!-- 8-ray Sun of Freedom -->
+  <circle cx="256" cy="235" r="38" fill="url(#goldGrad)"/>
+  <!-- Star -->
+  <polygon points="256,190 266,220 298,220 272,238 282,268 256,250 230,268 240,238 214,220 246,220" fill="#ffffff"/>
+  <!-- Text Arch -->
+  <text x="256" y="320" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="900" fill="#93c5fd" text-anchor="middle" letter-spacing="4">PNP BAUAN</text>
+  <text x="256" y="342" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="800" fill="#facc15" text-anchor="middle" letter-spacing="3">INVESTIGATION</text>
+</svg>

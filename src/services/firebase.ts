@@ -9,7 +9,11 @@ import {
 } from 'firebase/auth';
 import { 
   getFirestore, 
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   doc, 
+  getDoc,
   getDocFromServer, 
   collection, 
   onSnapshot, 
@@ -19,10 +23,11 @@ import {
   deleteDoc, 
   getDocs, 
   writeBatch, 
+  arrayUnion,
   Unsubscribe 
 } from 'firebase/firestore';
 import defaultFirebaseConfig from '../../firebase-applet-config.json';
-import { ReportSubmission } from '../types/reports';
+import { ReportSubmission, ReportStatus, AdminNote, AuditLogEntry, AttachmentItem } from '../types/reports';
 
 // Canonical Firebase config for bauan-investigation
 export const activeConfig = {
@@ -36,8 +41,22 @@ export function getActiveFirebaseConfig() {
 // 1. Initialize Firebase App directly with official project credentials
 const app = getApps().length === 0 ? initializeApp(activeConfig) : getApp();
 
-// Database initialization: Explicitly connected to Cloud Firestore (default) database
-export const db = getFirestore(app, '(default)');
+// Database initialization: Configured with multi-tab persistent local cache
+// Drastically cuts Firestore read quotas on Netlify and reloads by caching documents in browser IndexedDB
+const dbId = activeConfig.firestoreDatabaseId || '(default)';
+
+let firestoreInstance;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
+  }, dbId);
+} catch {
+  firestoreInstance = getFirestore(app, dbId);
+}
+
+export const db = firestoreInstance;
 export const auth = getAuth(app);
 
 /**
@@ -56,11 +75,17 @@ export async function testFirestoreConnection(): Promise<void> {
   }
 }
 
-
 // 2. Validate Connection to Firestore on startup
+// Session-guarded to prevent burning server read quota metric on every page reload
 async function testConnection() {
+  if (typeof window !== 'undefined' && sessionStorage.getItem('bauan_firebase_conn_verified')) {
+    return;
+  }
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('bauan_firebase_conn_verified', 'true');
+    }
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.warn('Firebase client connection check notice:', error.message);
@@ -187,6 +212,11 @@ export function isUserAuthorizedAdmin(user: User | null): boolean {
  */
 export async function ensureAdminProfileInFirestore(user: User): Promise<void> {
   if (!user || !user.uid) return;
+  // Session guard: Prevents burning a Firestore write quota on every tab switch or page refresh
+  const syncSessionKey = `bauan_admin_synced_${user.uid}`;
+  if (typeof window !== 'undefined' && sessionStorage.getItem(syncSessionKey)) {
+    return;
+  }
   const path = `admins/${user.uid}`;
   const isTargetSuperAdmin = user.uid === PRIMARY_SUPER_ADMIN_UID || (user.email && user.email.toLowerCase() === AUTHORIZED_ADMIN_EMAIL.toLowerCase());
   try {
@@ -204,6 +234,9 @@ export async function ensureAdminProfileInFirestore(user: User): Promise<void> {
       updatedAt: serverTimestamp(),
     });
     await setDoc(adminRef, adminData, { merge: true });
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(syncSessionKey, 'true');
+    }
     console.log(`[Firestore] Super Admin document successfully created/updated at ${path}`);
   } catch (err) {
     console.warn(`[Firestore] Admin profile sync notice for ${path}:`, err);
@@ -280,6 +313,7 @@ export function subscribeToReports(
 
 /**
  * Update Status workflow (NEW -> PROCESSING -> COMPLETED -> ARCHIVED) directly in Cloud Firestore
+ * Optimized: Uses arrayUnion to append audit log with ZERO additional reads!
  */
 export async function updateReportStatusInFirestore(
   reportId: string,
@@ -291,19 +325,6 @@ export async function updateReportStatusInFirestore(
     const now = new Date().toISOString();
     const reportRef = doc(db, 'reports', reportId);
 
-    const updatePayload: Record<string, any> = {
-      status: newStatus,
-      updatedAt: now,
-      serverUpdatedAt: serverTimestamp(),
-    };
-
-    if (newStatus === 'COMPLETED') {
-      updatePayload.completedAt = now;
-    } else if (newStatus === 'ARCHIVED') {
-      updatePayload.archivedAt = now;
-    }
-
-    const currentAuditLogs = (await getReportAuditLogs(reportId)) || [];
     const logEntry: AuditLogEntry = {
       id: `log_${Date.now()}`,
       timestamp: now,
@@ -313,12 +334,20 @@ export async function updateReportStatusInFirestore(
       details: `Status set to ${newStatus} by ${adminEmail}`,
     };
 
-    const sanitizedData = sanitizeFirestorePayload({
-      ...updatePayload,
-      auditLogs: [...currentAuditLogs, logEntry],
-    });
+    const updatePayload: Record<string, any> = {
+      status: newStatus,
+      updatedAt: now,
+      serverUpdatedAt: serverTimestamp(),
+      auditLogs: arrayUnion(logEntry),
+    };
 
-    await updateDoc(reportRef, sanitizedData);
+    if (newStatus === 'COMPLETED') {
+      updatePayload.completedAt = now;
+    } else if (newStatus === 'ARCHIVED') {
+      updatePayload.archivedAt = now;
+    }
+
+    await updateDoc(reportRef, updatePayload);
     console.log(`[Firestore] Status updated for ${path} -> ${newStatus}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
@@ -327,6 +356,7 @@ export async function updateReportStatusInFirestore(
 
 /**
  * Update Investigation Details directly in Cloud Firestore
+ * Optimized: Uses arrayUnion for audit log with ZERO extra server reads!
  */
 export async function updateReportDataInFirestore(
   reportId: string,
@@ -338,7 +368,6 @@ export async function updateReportDataInFirestore(
     const now = new Date().toISOString();
     const reportRef = doc(db, 'reports', reportId);
 
-    const currentAuditLogs = (await getReportAuditLogs(reportId)) || [];
     const logEntry: AuditLogEntry = {
       id: `log_${Date.now()}`,
       timestamp: now,
@@ -352,7 +381,7 @@ export async function updateReportDataInFirestore(
       reportData: updatedData,
       updatedAt: now,
       serverUpdatedAt: serverTimestamp(),
-      auditLogs: [...currentAuditLogs, logEntry],
+      auditLogs: arrayUnion(logEntry),
     });
 
     await updateDoc(reportRef, sanitizedData);
@@ -364,6 +393,7 @@ export async function updateReportDataInFirestore(
 
 /**
  * Add Private Internal Admin Note directly in Cloud Firestore
+ * Optimized: Uses arrayUnion for both adminNotes and auditLogs - consumes ZERO reads!
  */
 export async function addAdminNoteInFirestore(
   reportId: string,
@@ -382,8 +412,6 @@ export async function addAdminNoteInFirestore(
       createdAt: now,
     };
 
-    const currentNotes = (await getReportAdminNotes(reportId)) || [];
-    const currentAuditLogs = (await getReportAuditLogs(reportId)) || [];
     const logEntry: AuditLogEntry = {
       id: `log_${Date.now()}`,
       timestamp: now,
@@ -393,14 +421,12 @@ export async function addAdminNoteInFirestore(
       details: `Private internal note recorded by ${adminEmail}`,
     };
 
-    const sanitizedData = sanitizeFirestorePayload({
+    await updateDoc(reportRef, {
       updatedAt: now,
       serverUpdatedAt: serverTimestamp(),
-      adminNotes: [...currentNotes, newNote],
-      auditLogs: [...currentAuditLogs, logEntry],
+      adminNotes: arrayUnion(newNote),
+      auditLogs: arrayUnion(logEntry),
     });
-
-    await updateDoc(reportRef, sanitizedData);
     console.log(`[Firestore] Note added to ${path}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
@@ -410,7 +436,7 @@ export async function addAdminNoteInFirestore(
 async function getReportAuditLogs(reportId: string): Promise<AuditLogEntry[]> {
   try {
     const reportRef = doc(db, 'reports', reportId);
-    const snap = await getDocFromServer(reportRef);
+    const snap = await getDoc(reportRef);
     return snap.exists() ? snap.data().auditLogs || [] : [];
   } catch {
     return [];
@@ -420,7 +446,7 @@ async function getReportAuditLogs(reportId: string): Promise<AuditLogEntry[]> {
 async function getReportAdminNotes(reportId: string): Promise<AdminNote[]> {
   try {
     const reportRef = doc(db, 'reports', reportId);
-    const snap = await getDocFromServer(reportRef);
+    const snap = await getDoc(reportRef);
     return snap.exists() ? snap.data().adminNotes || [] : [];
   } catch {
     return [];
@@ -438,6 +464,44 @@ export async function deleteReportFromFirestore(reportId: string): Promise<void>
     console.log(`[Firestore] Deleted report ${path}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+/**
+ * Delete a single attachment from a report directly in Cloud Firestore
+ * Optimized: Uses cached getDoc instead of forcing server roundtrip
+ */
+export async function deleteAttachmentInFirestore(reportId: string, attachmentId: string): Promise<void> {
+  const path = `reports/${reportId}`;
+  try {
+    const reportRef = doc(db, 'reports', reportId);
+    const snap = await getDoc(reportRef);
+    if (!snap.exists()) return;
+
+    const currentAttachments: AttachmentItem[] = snap.data().attachments || [];
+    const updatedAttachments = currentAttachments.filter((att) => att.id !== attachmentId);
+
+    const now = new Date().toISOString();
+    const logEntry: AuditLogEntry = {
+      id: `log_${Date.now()}`,
+      timestamp: now,
+      adminUserId: auth.currentUser?.uid || 'OFFICER_01',
+      adminEmail: auth.currentUser?.email || 'bauan.pnp.investigation@gmail.com',
+      action: 'UPDATE_REPORT',
+      details: `Deleted attachment with ID ${attachmentId}`,
+    };
+
+    const sanitizedData = sanitizeFirestorePayload({
+      attachments: updatedAttachments,
+      updatedAt: now,
+      serverUpdatedAt: serverTimestamp(),
+      auditLogs: arrayUnion(logEntry),
+    });
+
+    await updateDoc(reportRef, sanitizedData);
+    console.log(`[Firestore] Deleted attachment ${attachmentId} from ${path}`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 

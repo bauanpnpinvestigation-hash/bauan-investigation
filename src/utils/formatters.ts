@@ -2,30 +2,70 @@ import { PersonalInformation } from '../types/reports';
 import { formatHumanDate } from './dateUtils';
 
 /**
+ * Capitalizes the first letter of each word in a string, preserving other casing.
+ */
+function capitalizeWords(str: string): string {
+  if (!str) return str;
+  return str
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
  * Format personal information into plain text key-value lines without empty fields.
  */
 export function formatPersonalInformationText(info: PersonalInformation): string {
-  const lines: string[] = [];
+  const nameParts: string[] = [];
+  if (info.firstName?.trim()) nameParts.push(capitalizeWords(info.firstName.trim()));
+  if (info.middleName?.trim()) {
+    const mid = info.middleName.trim();
+    // Support abbreviation if middle name is provided
+    const formattedMid = mid.length === 1 ? `${mid}.` : mid;
+    nameParts.push(capitalizeWords(formattedMid));
+  }
+  if (info.lastName?.trim()) nameParts.push(capitalizeWords(info.lastName.trim()));
+  if (info.suffix?.trim()) nameParts.push(capitalizeWords(info.suffix.trim()));
 
-  if (info.firstName?.trim()) lines.push(`First Name: ${info.firstName.trim()}`);
-  if (info.middleName?.trim()) lines.push(`Middle Name: ${info.middleName.trim()}`);
-  if (info.lastName?.trim()) lines.push(`Last Name: ${info.lastName.trim()}`);
-  if (info.suffix?.trim()) lines.push(`Suffix: ${info.suffix.trim()}`);
-  if (info.birthday?.trim()) lines.push(`Birthday: ${formatHumanDate(info.birthday)}`);
-  if (info.age !== null && info.age !== undefined) lines.push(`Age: ${info.age}`);
-  if (info.sex?.trim()) lines.push(`Sex: ${info.sex.trim()}`);
-  if (info.civilStatus?.trim()) lines.push(`Civil Status: ${info.civilStatus.trim()}`);
-  if (info.occupation?.trim()) lines.push(`Occupation: ${info.occupation.trim()}`);
-  if (info.nationality?.trim()) lines.push(`Nationality: ${info.nationality.trim()}`);
-  if (info.address?.trim()) lines.push(`Address: ${info.address.trim()}`);
-  if (info.contactNumber?.trim()) lines.push(`Contact Number: ${info.contactNumber.trim()}`);
+  const fullName = nameParts.join(' ');
+  const details: string[] = [];
 
-  return lines.join('\n');
+  if (fullName) details.push(fullName);
+  
+  if (info.age !== null && info.age !== undefined && String(info.age).trim() !== '') {
+    details.push(`${info.age} Years Old`);
+  }
+  
+  if (info.birthday?.trim()) {
+    details.push(`(DOB: ${formatHumanDate(info.birthday)})`);
+  }
+  
+  if (info.sex?.trim()) {
+    details.push(capitalizeWords(info.sex.trim()));
+  }
+  
+  if (info.civilStatus?.trim()) {
+    details.push(capitalizeWords(info.civilStatus.trim()));
+  }
+  
+  if (info.occupation?.trim()) {
+    details.push(capitalizeWords(info.occupation.trim()));
+  }
+  
+  if (info.address?.trim()) {
+    details.push(capitalizeWords(info.address.trim()));
+  }
+  
+  if (info.contactNumber?.trim()) {
+    details.push(info.contactNumber.trim());
+  }
+
+  return details.filter(Boolean).join(', ');
 }
 
 /**
  * Generic section formatter: transforms key-value pairs into clean plain text,
- * omitting empty or undefined values.
+ * omitting empty or undefined values, and omitting labels as requested.
  */
 export function formatSectionText(
   sectionTitle: string,
@@ -37,7 +77,7 @@ export function formatSectionText(
     if (pair.value !== null && pair.value !== undefined) {
       const valStr = String(pair.value).trim();
       if (valStr.length > 0 && valStr !== 'N/A' && valStr !== 'undefined' && valStr !== 'null') {
-        validLines.push(`${pair.label}: ${valStr}`);
+        validLines.push(`${valStr}`);
       }
     }
   }

@@ -34,6 +34,7 @@ interface AdminReportDetailProps {
   onUpdateReportData?: (reportId: string, updatedData: Record<string, any>) => void;
   onAddNote: (reportId: string, noteText: string) => void;
   onDeleteReport?: (reportId: string) => void;
+  onDeleteAttachment?: (reportId: string, attachmentId: string) => void;
   currentAdminEmail?: string;
 }
 
@@ -44,6 +45,7 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
   onUpdateReportData,
   onAddNote,
   onDeleteReport,
+  onDeleteAttachment,
   currentAdminEmail = 'bauan.pnp.investigation@gmail.com',
 }) => {
   const [newNote, setNewNote] = useState('');
@@ -581,16 +583,28 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                         </div>
                       </div>
 
-                      {att.previewUrl && (
-                        <a
-                          href={att.previewUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-white border border-slate-200 px-2 py-1 rounded"
-                        >
-                          View
-                        </a>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {att.previewUrl && (
+                          <a
+                            href={att.previewUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-white border border-slate-200 px-2 py-1 rounded"
+                          >
+                            View
+                          </a>
+                        )}
+                        {onDeleteAttachment && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteAttachment(report.id, att.id)}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="Delete attachment"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

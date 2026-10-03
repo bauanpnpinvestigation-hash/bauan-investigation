@@ -3,7 +3,9 @@ import { ReportSubmission, ReportStatus, ReportTypeId } from '../../types/report
 import { REPORT_TYPES } from '../../config/reportTypes';
 import { StatusBadge } from '../common/StatusBadge';
 import { formatHumanDate, formatHumanDateTime } from '../../utils/dateUtils';
-import { FirebaseSettingsModal } from '../common/FirebaseSettingsModal';
+import { BrandLogo } from '../common/BrandLogo';
+import { BackgroundWatermark } from '../common/BackgroundWatermark';
+import { PWAInstallButton } from '../common/PWAInstallButton';
 import { 
   Search, 
   Filter, 
@@ -54,7 +56,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [filterType, setFilterType] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [filterDate, setFilterDate] = useState<string>('');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Single report deletion state
   const [reportToDelete, setReportToDelete] = useState<ReportSubmission | null>(null);
@@ -153,32 +154,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
+    <div className="relative min-h-screen bg-slate-100 flex flex-col font-sans overflow-x-hidden">
+      {/* Resilient Official Seal Watermark */}
+      <BackgroundWatermark theme="light" />
+
       {/* Top Officer Header */}
-      <header className="bg-slate-900 text-white shadow-md sticky top-0 z-30 border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-900 border border-blue-600 flex items-center justify-center shadow-inner shrink-0">
-              <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <h1 className="text-xs sm:text-sm font-black tracking-tight leading-tight">
-                  POLICE RECORDS DASHBOARD
+      <header className="relative z-30 bg-slate-900 text-white shadow-md sticky top-0 border-b border-slate-800">
+        <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <BrandLogo size="sm" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h1 className="text-xs sm:text-sm font-black tracking-tight leading-tight truncate">
+                  BAUAN MPS - INVESTIGATION
                 </h1>
-                <span className="inline-block bg-amber-400 text-slate-950 text-[10px] font-black uppercase px-2 py-0.5 rounded shadow-xs border border-amber-300">
-                  SUPER ADMIN
+                <span className="hidden sm:inline-block bg-amber-400 text-slate-950 text-[10px] font-black uppercase px-1.5 py-0.5 rounded shadow-xs shrink-0">
+                  ADMIN
                 </span>
               </div>
-              <p className="text-[10px] sm:text-[11px] text-slate-300 flex items-center gap-1.5 truncate max-w-[200px] sm:max-w-none">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-white font-mono font-bold">{currentAdminEmail}</span>
-                <span className="hidden sm:inline text-slate-400">• Bauan PNP Investigation</span>
+              <p className="text-[10px] text-slate-300 flex items-center gap-1 truncate max-w-[150px] sm:max-w-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <span className="text-white font-mono font-bold truncate">{currentAdminEmail}</span>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2.5">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* PWA Install Button */}
+            <PWAInstallButton />
+
             {/* Erase DB Button */}
             {onEraseDatabase && reports.length > 0 && (
               <button
@@ -191,27 +195,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 title="Erase all records in database"
               >
                 <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                <span className="hidden md:inline">Erase DB</span>
+                <span className="hidden lg:inline">Erase DB</span>
               </button>
             )}
-
-            {/* Database Settings Trigger */}
-            <button
-              type="button"
-              onClick={() => setIsSettingsOpen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold shadow-xs transition-colors border border-slate-700 cursor-pointer"
-              title="Inspect or configure Bauan Investigation Firebase project and (default) database"
-            >
-              <Database className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">DB Config</span>
-            </button>
 
             {/* Station QR Placard Trigger */}
             <button
               type="button"
               onClick={onOpenQRCode}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-900 hover:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors border border-blue-700 cursor-pointer"
-              title="Display desk QR code pointing to /request"
+              className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white rounded-lg text-xs font-bold shadow-xs transition-colors border border-blue-700 cursor-pointer"
+              title="Display desk QR code"
             >
               <QrCode className="w-3.5 h-3.5 text-blue-300" />
               <span className="hidden sm:inline">Desk QR</span>
@@ -221,7 +214,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <button
               type="button"
               onClick={onLogout}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-rose-900/60 hover:text-rose-200 text-slate-300 rounded-lg text-xs font-semibold transition-colors border border-slate-700 cursor-pointer"
+              className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1.5 bg-slate-800 hover:bg-rose-900/60 hover:text-rose-200 text-slate-300 rounded-lg text-xs font-semibold transition-colors border border-slate-700 cursor-pointer"
               title="Logout from admin session"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -232,7 +225,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
+      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
         {/* SUMMARY STAT CARDS (Compact layout) */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           {/* Card: NEW */}
@@ -615,12 +608,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           )}
         </div>
       </main>
-
-      {/* Bauan Investigation Firebase Configuration Modal */}
-      <FirebaseSettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
 
       {/* CONFIRMED SINGLE RECORD DELETE MODAL */}
       {reportToDelete && (

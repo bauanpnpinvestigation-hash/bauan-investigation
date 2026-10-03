@@ -1,0 +1,3 @@
+# Netlify Single Page Application (SPA) redirect rule
+# Ensures direct navigation to /request, /admin, /admin/dashboard, etc. returns index.html (HTTP 200) instead of 404
+/*    /index.html   200
