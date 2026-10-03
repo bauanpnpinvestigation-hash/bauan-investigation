@@ -4,29 +4,6 @@
   "version": "0.0.0",
   "type": "module",
   "packageManager": "npm",
-  "os": [
-    "darwin",
-    "linux",
-    "win32",
-    "freebsd",
-    "android",
-    "aix",
-    "sunos",
-    "openbsd",
-    "netbsd"
-  ],
-  "cpu": [
-    "x64",
-    "arm64",
-    "arm",
-    "ia32",
-    "ppc64",
-    "riscv64",
-    "s390x",
-    "loong64",
-    "mips64el",
-    "wasm32"
-  ],
   "scripts": {
     "dev": "tsx server.ts",
     "start": "tsx server.ts",
