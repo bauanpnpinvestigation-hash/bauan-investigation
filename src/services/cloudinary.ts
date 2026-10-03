@@ -53,23 +53,46 @@ export async function uploadToCloudinary(
   file: File,
   options: CloudinaryUploadOptions = {}
 ): Promise<CloudinaryUploadResult> {
-  const { cloudName, uploadPreset } = getCloudinaryConfig();
   const timestamp = Date.now();
-  const cleanBaseName = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const customFileName = `${cleanBaseName}_${timestamp}`;
-
   const reportCategory = options.reportType || 'general_incident';
   const incidentRef = options.referenceNumber || `DRAFT_${timestamp}`;
   const targetFolder = `incident_reports/${reportCategory}/${incidentRef}`;
 
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('upload_preset', uploadPreset);
-  formData.append('folder', targetFolder);
-  formData.append('public_id', customFileName);
-
   try {
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
+    // 1. Request secure signed upload configurations from our backend API
+    const startResp = await fetch('/api/upload/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: file.name,
+        filetype: file.type,
+        referenceNumber: incidentRef,
+      })
+    });
+
+    if (!startResp.ok) {
+      throw new Error(`Signature endpoint returned status ${startResp.status}`);
+    }
+
+    const signedData = await startResp.json();
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('timestamp', signedData.timestamp.toString());
+    formData.append('folder', signedData.folder);
+    formData.append('public_id', signedData.publicId);
+
+    // If signed uploads are supported (secret is configured on backend), send signature & apiKey
+    if (signedData.signature) {
+      formData.append('api_key', signedData.apiKey);
+      formData.append('signature', signedData.signature);
+    } else {
+      // Fallback to local config / preset if backend signature is not generated
+      const { uploadPreset } = getCloudinaryConfig();
+      formData.append('upload_preset', uploadPreset);
+    }
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${signedData.cloudName}/auto/upload`, {
       method: 'POST',
       body: formData,
     });
@@ -77,10 +100,7 @@ export async function uploadToCloudinary(
     if (!response.ok) {
       const errJson = await response.json().catch(() => ({}));
       console.warn('Cloudinary upload returned status', response.status, errJson);
-      
-      // Fallback: If unsigned preset is not created in user's cloud yet,
-      // create a local object URL / base64 so the report submission never fails!
-      return await createLocalFallbackResult(file, targetFolder, customFileName);
+      return await createLocalFallbackResult(file, targetFolder, signedData.publicId);
     }
 
     const data = await response.json();
@@ -88,13 +108,13 @@ export async function uploadToCloudinary(
       url: data.url,
       secure_url: data.secure_url,
       public_id: data.public_id,
-      folder: targetFolder,
+      folder: signedData.folder,
       format: data.format,
       bytes: data.bytes,
     };
   } catch (networkErr) {
-    console.warn('Direct Cloudinary fetch failed, falling back to secure local data URL:', networkErr);
-    return await createLocalFallbackResult(file, targetFolder, customFileName);
+    console.warn('Secure Cloudinary upload failed, falling back to local data URL:', networkErr);
+    return await createLocalFallbackResult(file, targetFolder, `file_${timestamp}`);
   }
 }
 

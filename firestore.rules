@@ -3,32 +3,25 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Default catch-all deny
+    // Default catch-all deny for maximum zero-trust security
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Connection ping testing
-    match /test/{docId} {
-      allow read, write: if true;
-    }
-    match /connection_test/{docId} {
-      allow read, write: if true;
-    }
-
-    // Admins collection: Protected to authenticated personnel only
+    // Admins collection: Protected strictly to the unique trusted ADMIN_UID or official admin email
     match /admins/{adminId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && (
+        request.auth.uid == 'RbisRuyOLEbena1ncWe2xk8HTzy2' || 
+        request.auth.token.email == 'bauan.pnp.investigation@gmail.com'
+      );
     }
 
-    // Reports collection: Strict Citizen Privacy Protection
-    // Public intake is WRITE-ONLY (blind intake). Zero public read/list permissions.
-    // Absolutely NO unauthorized user can read, list, update, or delete sensitive personal data.
+    // Reports collection: Only the official trusted ADMIN_UID or verified admin email has permission
     match /reports/{reportId} {
-      // Citizen intake allows creation only
-      allow create: if true;
-      // Strict authorization: Only verified PNP officers can read, update, or delete records
-      allow read, update, delete: if request.auth != null;
+      allow read, write: if request.auth != null && (
+        request.auth.uid == 'RbisRuyOLEbena1ncWe2xk8HTzy2' || 
+        request.auth.token.email == 'bauan.pnp.investigation@gmail.com'
+      );
     }
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ReportSubmission, ReportStatus, ReportTypeId } from '../../types/reports';
 import { REPORT_TYPES } from '../../config/reportTypes';
 import { StatusBadge } from '../common/StatusBadge';
@@ -56,6 +56,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [filterType, setFilterType] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [filterDate, setFilterDate] = useState<string>('');
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
+  // Reset page when search or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchQuery, filterType, filterStatus, filterDate]);
 
   // Single report deletion state
   const [reportToDelete, setReportToDelete] = useState<ReportSubmission | null>(null);
@@ -118,6 +127,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return true;
     });
   }, [reports, activeTab, filterStatus, filterType, filterDate, searchQuery]);
+
+  const totalPages = Math.ceil(filteredReports.length / itemsPerPage);
+
+  const paginatedReports = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredReports.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredReports, currentPage]);
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -470,7 +486,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredReports.map((item) => {
+                    {paginatedReports.map((item) => {
                       const pi = item.personalInformation;
                       const fullName = `${pi.firstName} ${pi.middleName ? pi.middleName + ' ' : ''}${pi.lastName}${pi.suffix ? ' ' + pi.suffix : ''}`;
                       const reportTypeName = REPORT_TYPES[item.reportType]?.nameEn || item.reportType;
@@ -536,7 +552,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               {/* MOBILE CARDS (Ultra-compact for mobile screens) */}
               <div className="md:hidden divide-y divide-slate-100">
-                {filteredReports.map((item) => {
+                {paginatedReports.map((item) => {
                   const pi = item.personalInformation;
                   const fullName = `${pi.firstName} ${pi.middleName ? pi.middleName + ' ' : ''}${pi.lastName}${pi.suffix ? ' ' + pi.suffix : ''}`;
                   const reportTypeName = REPORT_TYPES[item.reportType]?.nameEn || item.reportType;
@@ -604,6 +620,84 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   );
                 })}
               </div>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex items-center justify-between sm:px-6">
+                  <div className="flex-1 flex justify-between sm:hidden">
+                    <button
+                      type="button"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      className="relative inline-flex items-center px-4 py-2 border border-slate-300 text-xs font-bold rounded-lg text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      type="button"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      className="ml-3 relative inline-flex items-center px-4 py-2 border border-slate-300 text-xs font-bold rounded-lg text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+                    >
+                      Next
+                    </button>
+                  </div>
+                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs text-slate-600">
+                        Showing <span className="font-bold">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+                        <span className="font-bold">
+                          {Math.min(currentPage * itemsPerPage, filteredReports.length)}
+                        </span>{' '}
+                        of <span className="font-bold">{filteredReports.length}</span> records
+                      </p>
+                    </div>
+                    <div>
+                      <nav className="relative z-0 inline-flex rounded-md shadow-2xs -space-x-px" aria-label="Pagination">
+                        <button
+                          type="button"
+                          disabled={currentPage === 1}
+                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                          className="relative inline-flex items-center px-3 py-2 rounded-l-lg border border-slate-300 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+                        >
+                          &lt; Prev
+                        </button>
+                        {[...Array(totalPages)].map((_, idx) => {
+                          const pageNum = idx + 1;
+                          if (totalPages > 6 && Math.abs(currentPage - pageNum) > 2 && pageNum !== 1 && pageNum !== totalPages) {
+                            if (pageNum === 2 || pageNum === totalPages - 1) {
+                              return <span key={pageNum} className="relative inline-flex items-center px-3 py-2 border border-slate-300 bg-white text-xs text-slate-400">...</span>;
+                            }
+                            return null;
+                          }
+                          return (
+                            <button
+                              key={pageNum}
+                              type="button"
+                              onClick={() => setCurrentPage(pageNum)}
+                              className={`relative inline-flex items-center px-3 py-2 border text-xs font-bold transition-all cursor-pointer ${
+                                currentPage === pageNum
+                                  ? 'z-10 bg-blue-900 border-blue-900 text-white'
+                                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          disabled={currentPage === totalPages}
+                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                          className="relative inline-flex items-center px-3 py-2 rounded-r-lg border border-slate-300 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+                        >
+                          Next &gt;
+                        </button>
+                      </nav>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

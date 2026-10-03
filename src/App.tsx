@@ -11,15 +11,6 @@ import { ReportSubmission, ReportStatus } from './types/reports';
 import { 
   auth, 
   signOutAdmin, 
-  createReportInFirestore, 
-  subscribeToReports, 
-  updateReportStatusInFirestore, 
-  updateReportDataInFirestore, 
-  addAdminNoteInFirestore,
-  deleteReportFromFirestore,
-  eraseAllReportsFromFirestore,
-  deleteAttachmentInFirestore,
-  ensureAdminProfileInFirestore,
   AUTHORIZED_ADMIN_EMAIL
 } from './services/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -49,30 +40,57 @@ export default function App() {
   // Toast notification manager
   const toast = useToast();
 
+  // Helper utility to make authenticated requests to our secure backend endpoints
+  const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+    const user = auth.currentUser;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string>),
+    };
+
+    if (user) {
+      const idToken = await user.getIdToken();
+      headers['Authorization'] = `Bearer ${idToken}`;
+    }
+
+    return fetch(url, {
+      ...options,
+      headers,
+    });
+  };
+
+  // Securely load reports list from backend API rather than a direct client-side stream
+  const loadReports = async () => {
+    try {
+      const resp = await fetchWithAuth('/api/admin/reports');
+      if (resp.ok) {
+        const data = await resp.json();
+        setReports(data.reports || []);
+      } else {
+        console.warn('[Admin API] Failed to fetch reports list from intermediate security worker.');
+      }
+    } catch (err) {
+      console.error('[Admin API] Network error pulling reports:', err);
+    }
+  };
+
   // Listen to Firebase Auth state
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setIsAuthLoading(false);
-      if (user) {
-        ensureAdminProfileInFirestore(user);
-      }
     });
     return () => unsubscribeAuth();
   }, []);
 
-  // Real-time Firestore listener for authenticated administrators
+  // Securely pull records on admin login or refresh every 45s to minimize Firestore free tier read cycles
   useEffect(() => {
     if (currentUser) {
-      const unsubscribeReports = subscribeToReports(
-        (liveReports) => {
-          setReports(liveReports);
-        },
-        (error) => {
-          console.warn('Firestore live listener notice (using cached fallback):', error);
-        }
-      );
-      return () => unsubscribeReports();
+      loadReports();
+      const interval = setInterval(loadReports, 45000);
+      return () => clearInterval(interval);
+    } else {
+      setReports([]);
     }
   }, [currentUser]);
 
@@ -95,91 +113,148 @@ export default function App() {
 
   const adminEmail = currentUser?.email || AUTHORIZED_ADMIN_EMAIL;
 
-  // Status updates in Cloud Firestore
+  // Status updates securely routed through backend API
   const handleUpdateStatus = async (reportId: string, newStatus: ReportStatus) => {
     try {
-      await updateReportStatusInFirestore(reportId, newStatus, adminEmail);
+      const resp = await fetchWithAuth(`/api/admin/reports/${reportId}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!resp.ok) {
+        throw new Error('Server-side status update failed validation.');
+      }
       toast.success(`Record status updated to ${newStatus}`);
-    } catch (err) {
-      console.error('Failed to update status in Firestore', err);
-      toast.error('Failed to update status in database');
+      loadReports();
+    } catch (err: any) {
+      console.error('[Admin API] Failed to update status:', err);
+      toast.error(err.message || 'Failed to update status in secure storage');
     }
   };
 
-  // Police officer updating investigation details in Cloud Firestore
+  // Police officer updating investigation details securely routed through backend API
   const handleUpdateReportData = async (reportId: string, updatedData: Record<string, any>) => {
     try {
-      await updateReportDataInFirestore(reportId, updatedData, adminEmail);
+      const resp = await fetchWithAuth(`/api/admin/reports/${reportId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ reportData: updatedData }),
+      });
+      if (!resp.ok) {
+        throw new Error('Server-side report update failed validation.');
+      }
       toast.success('Investigation details recorded in database');
-    } catch (err) {
-      console.error('Failed to update report data in Firestore', err);
-      toast.error('Failed to record investigation updates');
+      loadReports();
+    } catch (err: any) {
+      console.error('[Admin API] Failed to record investigation updates:', err);
+      toast.error(err.message || 'Failed to record investigation updates');
     }
   };
 
-  // Police officer posting internal note in Cloud Firestore
+  // Police officer posting internal note securely routed through backend API
   const handleAddNote = async (reportId: string, noteText: string) => {
     try {
-      await addAdminNoteInFirestore(reportId, noteText, adminEmail);
+      const resp = await fetchWithAuth(`/api/admin/reports/${reportId}/notes`, {
+        method: 'POST',
+        body: JSON.stringify({ note: noteText }),
+      });
+      if (!resp.ok) {
+        throw new Error('Server-side note append failed validation.');
+      }
       toast.success('Private internal note saved to audit log');
-    } catch (err) {
-      console.error('Failed to add note in Firestore', err);
-      toast.error('Failed to save internal note');
+      loadReports();
+    } catch (err: any) {
+      console.error('[Admin API] Failed to save internal note:', err);
+      toast.error(err.message || 'Failed to save internal note');
     }
   };
 
-  // Public Citizen submission to Cloud Firestore
+  // Public Citizen submission securely POSTed to Cloudflare Worker intermediate API endpoint
   const handlePublicSubmission = async (newReport: ReportSubmission) => {
     try {
-      await createReportInFirestore(newReport);
-      toast.success(`Personal Information submitted! Ref #${newReport.referenceNumber}`, 'Submission Confirmed');
-    } catch (err) {
-      console.error('Failed to persist report to Cloud Firestore', err);
-      toast.error('Error recording submission. Cached locally.');
-    } finally {
-      setReports((prev) => {
-        if (prev.some((r) => r.id === newReport.id)) return prev;
-        return [newReport, ...prev];
+      const response = await fetch('/api/intake', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reportType: newReport.reportType,
+          personalInformation: newReport.personalInformation,
+          attachments: newReport.attachments,
+        }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error code ${response.status}`);
+      }
+
+      const resData = await response.json();
+      toast.success(`Personal Information submitted! Ref #${resData.referenceNumber}`, 'Submission Confirmed');
+      
+      // Update locally returned tracking state to proceed to final step cleanly
+      newReport.id = resData.id;
+      newReport.referenceNumber = resData.referenceNumber;
+      newReport.createdAt = resData.createdAt;
+      
+      setReports((prev) => [newReport, ...prev]);
+    } catch (err: any) {
+      console.error('[Public API] Submission failed:', err);
+      toast.error(err.message || 'Error recording submission. Please check connection.');
+      throw err; // throw back to wizard to prevent premature step switching
     }
   };
 
-  // Delete single report from Cloud Firestore
+  // Delete single report securely routed through backend API
   const handleDeleteReport = async (reportId: string) => {
     try {
-      await deleteReportFromFirestore(reportId);
+      const resp = await fetchWithAuth(`/api/admin/reports/${reportId}`, {
+        method: 'DELETE',
+      });
+      if (!resp.ok) {
+        throw new Error('Server-side deletion failed validation.');
+      }
       setReports((prev) => prev.filter((r) => r.id !== reportId));
       if (selectedReportId === reportId) {
         setSelectedReportId(null);
       }
       toast.info('Report deleted from database');
-    } catch (err) {
-      console.error('Failed to delete report from Cloud Firestore', err);
-      toast.error('Failed to delete report');
+    } catch (err: any) {
+      console.error('[Admin API] Deletion failed:', err);
+      toast.error(err.message || 'Failed to delete report');
     }
   };
 
-  // Delete a single attachment from a report
+  // Delete a single attachment from a report securely routed through backend API
   const handleDeleteAttachment = async (reportId: string, attachmentId: string) => {
     try {
-      await deleteAttachmentInFirestore(reportId, attachmentId);
+      const resp = await fetchWithAuth(`/api/admin/reports/${reportId}/attachments/${attachmentId}`, {
+        method: 'DELETE',
+      });
+      if (!resp.ok) {
+        throw new Error('Server-side evidence removal failed validation.');
+      }
       toast.info('Evidence attachment removed');
-    } catch (err) {
-      console.error('Failed to delete attachment from Cloud Firestore', err);
-      toast.error('Failed to delete attachment');
+      loadReports();
+    } catch (err: any) {
+      console.error('[Admin API] Evidence removal failed:', err);
+      toast.error(err.message || 'Failed to delete attachment');
     }
   };
 
-  // Erase all reports from Cloud Firestore
+  // Erase all reports from database securely routed through backend API
   const handleEraseDatabase = async () => {
     try {
-      await eraseAllReportsFromFirestore();
+      const resp = await fetchWithAuth('/api/admin/reports', {
+        method: 'DELETE',
+      });
+      if (!resp.ok) {
+        throw new Error('Server-side database purge failed validation.');
+      }
       setReports([]);
       setSelectedReportId(null);
       toast.warning('All reports permanently erased from database');
-    } catch (err) {
-      console.error('Failed to erase database in Cloud Firestore', err);
-      toast.error('Failed to erase records');
+    } catch (err: any) {
+      console.error('[Admin API] Database purge failed:', err);
+      toast.error(err.message || 'Failed to erase records');
     }
   };
 
