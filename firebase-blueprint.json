@@ -1,0 +1,114 @@
+{
+  "entities": {
+    "Report": {
+      "title": "Report",
+      "description": "A public citizen intake or incident report",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Document ID"
+        },
+        "referenceNumber": {
+          "type": "string",
+          "description": "Human readable reference number, e.g. REQ-2026-000001",
+          "pattern": "^REQ-[0-9]{4}-[0-9A-Z]{6}$"
+        },
+        "reportType": {
+          "type": "string",
+          "description": "Category of report",
+          "enum": ["vehicular-incident", "incident-report", "complaint", "other-request"]
+        },
+        "status": {
+          "type": "string",
+          "description": "Current workflow status",
+          "enum": ["NEW", "PROCESSING", "COMPLETED", "ARCHIVED"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Resolution timestamp if completed"
+        },
+        "archivedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Archive timestamp if archived"
+        },
+        "personalInformation": {
+          "type": "object",
+          "description": "Complainant or citizen personal information"
+        },
+        "reportData": {
+          "type": "object",
+          "description": "Investigation fields completed by police office"
+        },
+        "attachments": {
+          "type": "array",
+          "description": "Uploaded evidence images hosted on Cloudinary"
+        },
+        "adminNotes": {
+          "type": "array",
+          "description": "Private internal police notes"
+        },
+        "auditLogs": {
+          "type": "array",
+          "description": "Security and action audit logs"
+        },
+        "stationOffice": {
+          "type": "string",
+          "description": "Police department or station unit"
+        }
+      },
+      "required": ["referenceNumber", "reportType", "status", "personalInformation"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Designated administrator or authorized police investigator",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Officer official email"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["ADMIN", "SUPERVISOR", "INVESTIGATOR"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "role"]
+    }
+  },
+  "firestore": {
+    "/reports/{reportId}": {
+      "schema": {
+        "$ref": "#/entities/Report"
+      },
+      "description": "Incident intake reports submitted by citizens and investigated by police"
+    },
+    "/admins/{adminId}": {
+      "schema": {
+        "$ref": "#/entities/Admin"
+      },
+      "description": "Authorized police administrative users"
+    }
+  }
+}
