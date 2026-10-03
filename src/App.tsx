@@ -11,6 +11,13 @@ import { ReportSubmission, ReportStatus } from './types/reports';
 import { 
   auth, 
   signOutAdmin, 
+  subscribeToReports,
+  deleteReportFromFirestore,
+  deleteAttachmentInFirestore,
+  updateReportStatusInFirestore,
+  updateReportDataInFirestore,
+  addAdminNoteInFirestore,
+  eraseAllReportsFromFirestore,
   AUTHORIZED_ADMIN_EMAIL
 } from './services/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -83,12 +90,19 @@ export default function App() {
     return () => unsubscribeAuth();
   }, []);
 
-  // Securely pull records on admin login or refresh every 45s to minimize Firestore free tier read cycles
+  // Securely pull records on admin login using client SDK (which utilizes active browser session) with API fallback
   useEffect(() => {
     if (currentUser) {
-      loadReports();
-      const interval = setInterval(loadReports, 45000);
-      return () => clearInterval(interval);
+      const unsubscribe = subscribeToReports(
+        (liveReports) => {
+          setReports(liveReports);
+        },
+        (err) => {
+          console.warn('[Direct Firestore Sync failed, falling back to secure API]:', err);
+          loadReports();
+        }
+      );
+      return () => unsubscribe();
     } else {
       setReports([]);
     }
@@ -113,57 +127,75 @@ export default function App() {
 
   const adminEmail = currentUser?.email || AUTHORIZED_ADMIN_EMAIL;
 
-  // Status updates securely routed through backend API
+  // Status updates securely routed to Firestore with API fallback
   const handleUpdateStatus = async (reportId: string, newStatus: ReportStatus) => {
     try {
-      const resp = await fetchWithAuth(`/api/admin/reports/${reportId}/status`, {
-        method: 'POST',
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (!resp.ok) {
-        throw new Error('Server-side status update failed validation.');
-      }
+      await updateReportStatusInFirestore(reportId, newStatus, adminEmail);
       toast.success(`Record status updated to ${newStatus}`);
-      loadReports();
     } catch (err: any) {
-      console.error('[Admin API] Failed to update status:', err);
-      toast.error(err.message || 'Failed to update status in secure storage');
+      console.warn('[Direct Firestore Update failed, trying API fallback]:', err);
+      try {
+        const resp = await fetchWithAuth(`/api/admin/reports/${reportId}/status`, {
+          method: 'POST',
+          body: JSON.stringify({ status: newStatus }),
+        });
+        if (!resp.ok) {
+          throw new Error('Server-side status update failed validation.');
+        }
+        toast.success(`Record status updated to ${newStatus}`);
+        loadReports();
+      } catch (fallbackErr: any) {
+        console.error('[Admin API] Failed to update status:', fallbackErr);
+        toast.error(fallbackErr.message || 'Failed to update status');
+      }
     }
   };
 
-  // Police officer updating investigation details securely routed through backend API
+  // Police officer updating investigation details securely routed to Firestore with API fallback
   const handleUpdateReportData = async (reportId: string, updatedData: Record<string, any>) => {
     try {
-      const resp = await fetchWithAuth(`/api/admin/reports/${reportId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ reportData: updatedData }),
-      });
-      if (!resp.ok) {
-        throw new Error('Server-side report update failed validation.');
-      }
+      await updateReportDataInFirestore(reportId, updatedData, adminEmail);
       toast.success('Investigation details recorded in database');
-      loadReports();
     } catch (err: any) {
-      console.error('[Admin API] Failed to record investigation updates:', err);
-      toast.error(err.message || 'Failed to record investigation updates');
+      console.warn('[Direct Firestore Update failed, trying API fallback]:', err);
+      try {
+        const resp = await fetchWithAuth(`/api/admin/reports/${reportId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ reportData: updatedData }),
+        });
+        if (!resp.ok) {
+          throw new Error('Server-side report update failed validation.');
+        }
+        toast.success('Investigation details recorded in database');
+        loadReports();
+      } catch (fallbackErr: any) {
+        console.error('[Admin API] Failed to record investigation updates:', fallbackErr);
+        toast.error(fallbackErr.message || 'Failed to record investigation updates');
+      }
     }
   };
 
-  // Police officer posting internal note securely routed through backend API
+  // Police officer posting internal note securely routed to Firestore with API fallback
   const handleAddNote = async (reportId: string, noteText: string) => {
     try {
-      const resp = await fetchWithAuth(`/api/admin/reports/${reportId}/notes`, {
-        method: 'POST',
-        body: JSON.stringify({ note: noteText }),
-      });
-      if (!resp.ok) {
-        throw new Error('Server-side note append failed validation.');
-      }
+      await addAdminNoteInFirestore(reportId, noteText, adminEmail);
       toast.success('Private internal note saved to audit log');
-      loadReports();
     } catch (err: any) {
-      console.error('[Admin API] Failed to save internal note:', err);
-      toast.error(err.message || 'Failed to save internal note');
+      console.warn('[Direct Firestore Update failed, trying API fallback]:', err);
+      try {
+        const resp = await fetchWithAuth(`/api/admin/reports/${reportId}/notes`, {
+          method: 'POST',
+          body: JSON.stringify({ note: noteText }),
+        });
+        if (!resp.ok) {
+          throw new Error('Server-side note append failed validation.');
+        }
+        toast.success('Private internal note saved to audit log');
+        loadReports();
+      } catch (fallbackErr: any) {
+        console.error('[Admin API] Failed to save internal note:', fallbackErr);
+        toast.error(fallbackErr.message || 'Failed to save internal note');
+      }
     }
   };
 
@@ -203,58 +235,82 @@ export default function App() {
     }
   };
 
-  // Delete single report securely routed through backend API
+  // Delete single report securely routed to Firestore with API fallback
   const handleDeleteReport = async (reportId: string) => {
     try {
-      const resp = await fetchWithAuth(`/api/admin/reports/${reportId}`, {
-        method: 'DELETE',
-      });
-      if (!resp.ok) {
-        throw new Error('Server-side deletion failed validation.');
-      }
+      await deleteReportFromFirestore(reportId);
       setReports((prev) => prev.filter((r) => r.id !== reportId));
       if (selectedReportId === reportId) {
         setSelectedReportId(null);
       }
       toast.info('Report deleted from database');
     } catch (err: any) {
-      console.error('[Admin API] Deletion failed:', err);
-      toast.error(err.message || 'Failed to delete report');
+      console.warn('[Direct Firestore Delete failed, trying API fallback]:', err);
+      try {
+        const resp = await fetchWithAuth(`/api/admin/reports/${reportId}`, {
+          method: 'DELETE',
+        });
+        if (!resp.ok) {
+          throw new Error('Server-side deletion failed validation.');
+        }
+        setReports((prev) => prev.filter((r) => r.id !== reportId));
+        if (selectedReportId === reportId) {
+          setSelectedReportId(null);
+        }
+        toast.info('Report deleted from database');
+      } catch (fallbackErr: any) {
+        console.error('[Admin API] Deletion failed:', fallbackErr);
+        toast.error(fallbackErr.message || 'Failed to delete report');
+      }
     }
   };
 
-  // Delete a single attachment from a report securely routed through backend API
+  // Delete a single attachment from a report securely routed to Firestore with API fallback
   const handleDeleteAttachment = async (reportId: string, attachmentId: string) => {
     try {
-      const resp = await fetchWithAuth(`/api/admin/reports/${reportId}/attachments/${attachmentId}`, {
-        method: 'DELETE',
-      });
-      if (!resp.ok) {
-        throw new Error('Server-side evidence removal failed validation.');
-      }
+      await deleteAttachmentInFirestore(reportId, attachmentId);
       toast.info('Evidence attachment removed');
-      loadReports();
     } catch (err: any) {
-      console.error('[Admin API] Evidence removal failed:', err);
-      toast.error(err.message || 'Failed to delete attachment');
+      console.warn('[Direct Firestore Attachment removal failed, trying API fallback]:', err);
+      try {
+        const resp = await fetchWithAuth(`/api/admin/reports/${reportId}/attachments/${attachmentId}`, {
+          method: 'DELETE',
+        });
+        if (!resp.ok) {
+          throw new Error('Server-side evidence removal failed validation.');
+        }
+        toast.info('Evidence attachment removed');
+        loadReports();
+      } catch (fallbackErr: any) {
+        console.error('[Admin API] Evidence removal failed:', fallbackErr);
+        toast.error(fallbackErr.message || 'Failed to delete attachment');
+      }
     }
   };
 
-  // Erase all reports from database securely routed through backend API
+  // Erase all reports from database securely routed to Firestore with API fallback
   const handleEraseDatabase = async () => {
     try {
-      const resp = await fetchWithAuth('/api/admin/reports', {
-        method: 'DELETE',
-      });
-      if (!resp.ok) {
-        throw new Error('Server-side database purge failed validation.');
-      }
+      await eraseAllReportsFromFirestore();
       setReports([]);
       setSelectedReportId(null);
       toast.warning('All reports permanently erased from database');
     } catch (err: any) {
-      console.error('[Admin API] Database purge failed:', err);
-      toast.error(err.message || 'Failed to erase records');
+      console.warn('[Direct Firestore Database purge failed, trying API fallback]:', err);
+      try {
+        const resp = await fetchWithAuth('/api/admin/reports', {
+          method: 'DELETE',
+        });
+        if (!resp.ok) {
+          throw new Error('Server-side database purge failed validation.');
+        }
+        setReports([]);
+        setSelectedReportId(null);
+        toast.warning('All reports permanently erased from database');
+      } catch (fallbackErr: any) {
+        console.error('[Admin API] Database purge failed:', fallbackErr);
+        toast.error(fallbackErr.message || 'Failed to erase records');
+      }
     }
   };
 
