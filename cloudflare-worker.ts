@@ -20,6 +20,7 @@ export interface Env {
   CLOUDINARY_CLOUD_NAME: string;
   FIREBASE_PROJECT_ID: string;
   RATE_LIMIT_KV?: KVNamespace; // Optional Cloudflare KV for IP rate limiting
+  ASSETS?: { fetch: (req: Request | string) => Promise<Response> }; // Cloudflare Workers static site assets binding
 }
 
 export default {
@@ -63,8 +64,37 @@ export default {
       }
 
       // ==========================================
-      // ROUTING
+      // ROUTING & STATIC ASSETS FALLBACK
       // ==========================================
+
+      // Serve static frontend assets if bound (Wrangler Assets)
+      if (!path.startsWith('/api/')) {
+        if (env.ASSETS) {
+          const assetResp = await env.ASSETS.fetch(request);
+          if (assetResp.status !== 404) {
+            return assetResp;
+          }
+          // For SPA client-side routing fallback to index.html
+          return await env.ASSETS.fetch(new URL('/index.html', request.url).toString());
+        }
+
+        // Default API root status response
+        if (path === '/' || path === '/health') {
+          return new Response(JSON.stringify({
+            status: 'online',
+            service: 'Bauan MPS Investigation Section API & Portal Backend',
+            version: '1.0.0',
+            endpoints: {
+              intake: '/api/intake',
+              upload: '/api/upload/start',
+              admin: '/api/admin/reports'
+            }
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', ...getSecurityHeaders() },
+          });
+        }
+      }
 
       // A. Public Intake Submission
       if (path === '/api/intake' && method === 'POST') {

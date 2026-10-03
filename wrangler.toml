@@ -1,7 +1,10 @@
-# Wrangler configuration for Cloudflare Worker Backend API
+# Wrangler configuration for Cloudflare Worker Backend API & Static Frontend
 name = "bauan-mps-api"
 main = "cloudflare-worker.ts"
 compatibility_date = "2024-03-01"
+
+# Serve static frontend built in ./dist directory
+assets = { directory = "./dist", binding = "ASSETS" }
 
 [vars]
 # Configure these variables in your Cloudflare dashboard (or under wrangler secrets)
