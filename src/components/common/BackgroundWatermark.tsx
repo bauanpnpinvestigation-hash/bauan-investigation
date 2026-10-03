@@ -20,7 +20,7 @@ export const BackgroundWatermark: React.FC<BackgroundWatermarkProps> = ({
   // with 100% transparent outer background (zero white borders/corners)
   const defaultOpacityClass = theme === 'dark' 
     ? 'opacity-[0.24] sm:opacity-[0.32]' 
-    : 'opacity-[0.14] sm:opacity-[0.18]';
+    : 'opacity-[0.85] sm:opacity-[0.95]';
 
   return (
     <div

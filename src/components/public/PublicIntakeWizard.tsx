@@ -10,6 +10,7 @@ import { CopyButton } from '../common/CopyButton';
 import { BrandLogo } from '../common/BrandLogo';
 import { BackgroundWatermark } from '../common/BackgroundWatermark';
 import { PWAInstallButton } from '../common/PWAInstallButton';
+import { PublicFooter } from './PublicFooter';
 import { generateReferenceNumber } from '../../utils/referenceNumber';
 import { formatHumanDate } from '../../utils/dateUtils';
 import { 
@@ -63,6 +64,10 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<ReportSubmission | null>(null);
+
+  // Consent Agreement State
+  const [hasConsented, setHasConsented] = useState(false);
+  const [consentError, setConsentError] = useState(false);
 
   // Validate Personal Info
   const validatePersonalInfo = (): boolean => {
@@ -148,10 +153,12 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
     setShowAttachmentsSection(false);
     setSubmissionResult(null);
     setPersonalErrors({});
+    setHasConsented(false);
+    setConsentError(false);
   };
 
   return (
-    <div className="relative min-h-screen bg-slate-100 flex flex-col font-sans overflow-x-hidden">
+    <div className="relative min-h-screen bg-transparent flex flex-col font-sans overflow-x-hidden">
       {/* Resilient Official Seal Watermark */}
       <BackgroundWatermark theme="light" />
 
@@ -162,7 +169,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
             <BrandLogo size="sm" />
             <div className="min-w-0">
               <h1 className="text-xs sm:text-base font-extrabold tracking-tight leading-tight truncate">
-                BAUAN MPS - INTAKE
+                Bauan MPS Investigation
               </h1>
               <p className="text-[10px] sm:text-[11px] text-blue-200 truncate">
                 Public Records Portal
@@ -192,7 +199,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
       <main className="relative z-10 flex-1 max-w-3xl w-full mx-auto p-4 sm:p-6 pb-24">
         {/* Step Indicator Header (Steps 1 & 2) */}
         {currentStep < 3 && (
-          <div className="mb-6 bg-white rounded-xl p-4 sm:p-5 border border-slate-200 shadow-xs">
+          <div className="mb-6 bg-white/75 rounded-xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-blue-900">
                 Step {currentStep} of 2
@@ -216,7 +223,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
         {/* STEP 1: Personal Information Form (The ONLY information required from public) */}
         {currentStep === 1 && (
           <div className="space-y-6 animate-fadeIn">
-            <div className="bg-white rounded-xl p-5 sm:p-7 border border-slate-200 shadow-xs space-y-6">
+            <div className="bg-white/75 rounded-xl p-5 sm:p-7 border border-slate-200/80 shadow-xs space-y-6">
               <div className="border-b border-slate-200 pb-4">
                 <span className="text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5 mb-1">
                   <UserCheck className="w-4 h-4 text-blue-700" />
@@ -303,7 +310,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
             </div>
 
             {/* Personal Information Review */}
-            <div className="bg-white rounded-xl p-5 sm:p-6 border border-slate-200 shadow-xs">
+            <div className="bg-white/75 rounded-xl p-5 sm:p-6 border border-slate-200/80 shadow-xs">
               <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
                 <h4 className="font-extrabold text-sm sm:text-base text-slate-900">
                   PERSONAL INFORMATION (Impormasyon ng Tao)
@@ -394,6 +401,67 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
               )}
             </div>
 
+            {/* Data Privacy & Records Safekeeping Consent Checkbox */}
+            <div className={`p-5 rounded-xl border transition-all ${
+              consentError 
+                ? 'bg-rose-50 border-rose-300 text-rose-950 shadow-xs animate-shake' 
+                : 'bg-white/70 border-slate-200 text-slate-800'
+            }`}>
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 bg-blue-50 text-blue-900 rounded-lg shrink-0 border border-blue-100">
+                  <Shield className="w-4 h-4 text-blue-800" />
+                </div>
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-xs sm:text-sm uppercase tracking-wide text-blue-950">
+                    Official Record Safekeeping Agreement & Consent
+                  </h4>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    By submitting this form, I hereby voluntarily declare that the personal information provided above is true and correct. I authorize the <strong className="text-blue-900">Bauan Municipal Police Station (MPS) Investigation & Records Section</strong> to securely record, store, and process my details in their digital database in complete accordance with <strong className="text-slate-900">Republic Act No. 10173 (Data Privacy Act of 2012)</strong> for official police records safekeeping and future investigator lookup.
+                  </p>
+                  <p className="text-xs text-blue-950 font-bold leading-relaxed">
+                    (Sa pagsumite nito, pinatutunayan ko na kusang-loob at tama ang aking ibinigay na impormasyon at pinapahintulutan ko ang Bauan MPS na ligtas na itago ito para sa opisyal na rekord ng pulisya.)
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <label className="flex items-center gap-2.5 cursor-pointer group text-xs font-bold text-slate-900 select-none">
+                  <input
+                    type="checkbox"
+                    checked={hasConsented}
+                    onChange={(e) => {
+                      setHasConsented(e.target.checked);
+                      if (e.target.checked) setConsentError(false);
+                    }}
+                    className="w-4 h-4 text-blue-900 border-slate-300 rounded focus:ring-blue-900 cursor-pointer"
+                  />
+                  <span>SANG-AYON AKO / I AGREE TO THE SAFEKEEPING AGREEMENT</span>
+                </label>
+
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHasConsented(false);
+                      setConsentError(false);
+                      alert("Tinatanggihan mo ang Data Privacy Agreement. Ibabalik ka sa naunang hakbang upang baguhin ang impormasyon.");
+                      handleBackToEdit();
+                    }}
+                    className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 border border-rose-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                  >
+                    TUMATANGGI AKO (I Refuse)
+                  </button>
+                </div>
+              </div>
+              
+              {consentError && (
+                <p className="mt-2 text-[11px] font-bold text-rose-700 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>Kailangan mong lagyan ng tsek ang kahon ng pagsang-ayon (I Agree) bago magpatuloy.</span>
+                </p>
+              )}
+            </div>
+
             {/* Submission Actions */}
             <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 pt-2">
               <button
@@ -406,7 +474,14 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setShowConfirmModal(true)}
+                onClick={() => {
+                  if (!hasConsented) {
+                    setConsentError(true);
+                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                    return;
+                  }
+                  setShowConfirmModal(true);
+                }}
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3 sm:py-3.5 text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl text-xs sm:text-sm font-extrabold shadow-md active:scale-[0.98] cursor-pointer"
               >
                 <Send className="w-4 h-4" />
@@ -436,7 +511,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
             </div>
 
             {/* Reference Number Box */}
-            <div className="p-6 bg-white border-2 border-blue-900 rounded-2xl shadow-lg text-center space-y-3">
+            <div className="p-6 bg-white/80 border-2 border-blue-900 rounded-2xl shadow-lg text-center space-y-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 Official Tracking Reference Number
               </span>
@@ -535,6 +610,8 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
           </div>
         </div>
       )}
+      {/* Magnificent Justice & Emergency Contacts Footer */}
+      <PublicFooter />
     </div>
   );
 };
