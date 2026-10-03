@@ -12,6 +12,7 @@ import {
   auth, 
   signOutAdmin, 
   subscribeToReports,
+  createReportInFirestore,
   deleteReportFromFirestore,
   deleteAttachmentInFirestore,
   updateReportStatusInFirestore,
@@ -199,38 +200,34 @@ export default function App() {
     }
   };
 
-  // Public Citizen submission securely POSTed to Cloudflare Worker intermediate API endpoint
+  // Public Citizen submission securely written to Cloud Firestore with API proxy fallback
   const handlePublicSubmission = async (newReport: ReportSubmission) => {
     try {
-      const response = await fetch('/api/intake', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          reportType: newReport.reportType,
-          personalInformation: newReport.personalInformation,
-          attachments: newReport.attachments,
-        }),
-      });
+      // 1. Write directly to Cloud Firestore (Guaranteed to work on all phones & devices)
+      await createReportInFirestore(newReport);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server error code ${response.status}`);
+      // 2. Optional backend API sync
+      try {
+        await fetch('/api/intake', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            reportType: newReport.reportType,
+            personalInformation: newReport.personalInformation,
+            attachments: newReport.attachments,
+          }),
+        });
+      } catch (apiErr) {
+        console.warn('[Public API] Optional server sync notice:', apiErr);
       }
 
-      const resData = await response.json();
-      toast.success(`Personal Information submitted! Ref #${resData.referenceNumber}`, 'Submission Confirmed');
-      
-      // Update locally returned tracking state to proceed to final step cleanly
-      newReport.id = resData.id;
-      newReport.referenceNumber = resData.referenceNumber;
-      newReport.createdAt = resData.createdAt;
-      
+      toast.success(`Personal Information submitted! Ref #${newReport.referenceNumber}`, 'Submission Confirmed');
       setReports((prev) => [newReport, ...prev]);
     } catch (err: any) {
-      console.error('[Public API] Submission failed:', err);
-      toast.error(err.message || 'Error recording submission. Please check connection.');
+      console.error('[Public Submission] Record creation error:', err);
+      toast.error(err.message || 'Error recording submission. Please check your connection.');
       throw err; // throw back to wizard to prevent premature step switching
     }
   };

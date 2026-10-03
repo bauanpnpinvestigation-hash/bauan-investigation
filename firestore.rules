@@ -16,9 +16,12 @@ service cloud.firestore {
       );
     }
 
-    // Reports collection: Only the official trusted ADMIN_UID or verified admin email has permission
+    // Reports collection:
+    // - Public citizens can submit/create new personal intake reports.
+    // - Reading, searching, updating, and deleting records is restricted strictly to authorized police personnel.
     match /reports/{reportId} {
-      allow read, write: if request.auth != null && (
+      allow create: if true;
+      allow read, update, delete: if request.auth != null && (
         request.auth.uid == 'RbisRuyOLEbena1ncWe2xk8HTzy2' || 
         request.auth.token.email == 'bauan.pnp.investigation@gmail.com'
       );
