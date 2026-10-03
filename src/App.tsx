@@ -4,9 +4,7 @@ import { AdminLogin } from './components/admin/AdminLogin';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AdminReportDetail } from './components/admin/AdminReportDetail';
 import { QRCodeModal } from './components/common/QRCodeModal';
-import { BrandLogo } from './components/common/BrandLogo';
 import { BackgroundWatermark } from './components/common/BackgroundWatermark';
-import { PWAInstallButton } from './components/common/PWAInstallButton';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { useToast } from './context/ToastContext';
 import { ReportSubmission, ReportStatus } from './types/reports';
@@ -21,18 +19,16 @@ import {
   deleteReportFromFirestore,
   eraseAllReportsFromFirestore,
   deleteAttachmentInFirestore,
-  isUserAuthorizedAdmin,
   ensureAdminProfileInFirestore,
   AUTHORIZED_ADMIN_EMAIL
 } from './services/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { Shield, QrCode, Lock, ArrowRight } from 'lucide-react';
 
 export default function App() {
-  // Current route pathname
+  // Current route management (Direct Public Intake as primary front)
   const [currentPath, setCurrentPath] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return window.location.pathname || '/';
+      return window.location.pathname;
     }
     return '/';
   });
@@ -191,30 +187,14 @@ export default function App() {
   const handleLogout = async () => {
     await signOutAdmin();
     toast.info('Logged out from officer session');
-    navigateTo('/admin/login');
+    navigateTo('/');
   };
-
-  // Route: /request -> Public intake form
-  if (currentPath === '/request') {
-    return (
-      <>
-        <PublicIntakeWizard
-          onSubmitSuccess={handlePublicSubmission}
-          onNavigateToAdmin={() => navigateTo('/admin')}
-        />
-        <QRCodeModal
-          isOpen={isQRModalOpen}
-          onClose={() => setIsQRModalOpen(false)}
-        />
-      </>
-    );
-  }
 
   // Route: /admin or /admin/dashboard or /admin/login
   if (currentPath.startsWith('/admin')) {
     if (isAuthLoading) {
       return (
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white font-sans">
           <div className="text-center space-y-3">
             <span className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin inline-block" />
             <p className="text-xs font-semibold text-slate-400">Verifying Police Authentication...</p>
@@ -231,17 +211,18 @@ export default function App() {
             onLoginSuccess={() => {
               navigateTo('/admin/dashboard');
             }}
-            onNavigateToPublic={() => navigateTo('/request')}
+            onNavigateToPublic={() => navigateTo('/')}
           />
           <QRCodeModal
             isOpen={isQRModalOpen}
             onClose={() => setIsQRModalOpen(false)}
           />
+          <OfflineIndicator />
         </>
       );
     }
 
-    // Authenticated admin view
+    // Authenticated admin view: Detail
     const selectedReport = selectedReportId
       ? reports.find((r) => r.id === selectedReportId)
       : null;
@@ -266,10 +247,12 @@ export default function App() {
             isOpen={isQRModalOpen}
             onClose={() => setIsQRModalOpen(false)}
           />
+          <OfflineIndicator />
         </div>
       );
     }
 
+    // Authenticated admin view: Dashboard
     return (
       <>
         <AdminDashboard
@@ -285,136 +268,25 @@ export default function App() {
           isOpen={isQRModalOpen}
           onClose={() => setIsQRModalOpen(false)}
         />
+        <OfflineIndicator />
       </>
     );
   }
 
-  // Route: / (Default landing page directing to Public /request or Private /admin)
+  // PRIMARY MAIN FRONT: Directly opens Citizen Public Intake Wizard!
+  // No pathway confusion when clients scan QR or open the app.
+  // Officer login is discreetly located at top right header.
   return (
-    <div className="relative min-h-screen bg-slate-900 text-white flex flex-col justify-between font-sans overflow-x-hidden">
-      {/* Resilient Official Insignia Ambient Background Watermark */}
-      <BackgroundWatermark theme="dark" />
-
-      {/* Top Header */}
-      <header className="relative z-10 bg-slate-950/80 border-b border-slate-800 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <BrandLogo size="sm" />
-            <div className="min-w-0">
-              <h1 className="text-xs sm:text-base font-black tracking-tight text-white leading-tight uppercase truncate">
-                BAUAN MPS - INVESTIGATION SECTION
-              </h1>
-              <p className="text-[10px] sm:text-xs text-blue-300 font-semibold truncate">
-                Official Public Intake & Investigation Platform
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <PWAInstallButton />
-          </div>
-        </div>
-      </header>
-
-      {/* Main Hero & Dual Pathway */}
-      <main className="relative z-10 max-w-5xl mx-auto px-3 sm:px-6 py-6 sm:py-10 flex-1 flex flex-col justify-center w-full">
-        <div className="text-center max-w-2xl mx-auto mb-6 sm:mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full text-blue-300 text-[11px] sm:text-xs font-semibold mb-3">
-            <Lock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-            <span className="truncate">Connected to Cloud Firestore & Cloudinary Storage</span>
-          </div>
-          <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-            Official Public Intake & Investigation Platform
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-300 mt-2 sm:mt-3 leading-relaxed">
-            Live database connected. Citizens submit structured Personal Information via QR; police officers complete investigation records and attach Cloudinary evidence.
-          </p>
-        </div>
-
-        {/* Two Pathway Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 max-w-4xl mx-auto w-full">
-          {/* Card 1: Public Intake (/request) */}
-          <div className="bg-slate-800/80 backdrop-blur-xs border-2 border-blue-600/60 hover:border-blue-500 rounded-2xl p-5 sm:p-7 flex flex-col justify-between shadow-xl transition-all">
-            <div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 mb-3 sm:mb-4">
-                <QrCode className="w-5 h-5 sm:w-6 sm:h-6" />
-              </div>
-              <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-blue-400">
-                Public Area (Accessible via QR)
-              </span>
-              <h3 className="text-lg sm:text-xl font-black text-white mt-1">
-                Citizen Personal Info Intake
-              </h3>
-              <p className="text-xs font-semibold text-blue-200 mt-0.5">
-                (Pagtatala ng Personal na Impormasyon ng Mamamayan)
-              </p>
-              <p className="text-xs text-slate-300 mt-2 sm:mt-3 leading-relaxed">
-                Direct citizen intake for Personal Information only. No account creation required. Fast submission with official tracking Reference Number.
-              </p>
-            </div>
-
-            <div className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-slate-700/60">
-              <button
-                type="button"
-                onClick={() => navigateTo('/request')}
-                className="w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 sm:px-5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-[0.98] cursor-pointer"
-              >
-                <span>Open Public Request (/request)</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Card 2: Admin Portal (/admin) */}
-          <div className="bg-slate-800/80 backdrop-blur-xs border-2 border-slate-700 hover:border-slate-600 rounded-2xl p-5 sm:p-7 flex flex-col justify-between shadow-xl transition-all">
-            <div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 mb-3 sm:mb-4">
-                <Shield className="w-5 h-5 sm:w-6 sm:h-6" />
-              </div>
-              <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-amber-400">
-                Authorized Personnel Only
-              </span>
-              <h3 className="text-lg sm:text-xl font-black text-white mt-1">
-                Administrator Dashboard
-              </h3>
-              <p className="text-xs font-semibold text-slate-400 mt-0.5">
-                (Portal ng mga Imbestigador at Kawani)
-              </p>
-              <p className="text-xs text-slate-300 mt-2 sm:mt-3 leading-relaxed">
-                Review live submissions from Cloud Firestore. Fill out investigation details, use copy buttons, copy sections, and generate complete reports.
-              </p>
-            </div>
-
-            <div className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-slate-700/60">
-              <button
-                type="button"
-                onClick={() => navigateTo('/admin/login')}
-                className="w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 sm:px-5 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-[0.98] cursor-pointer"
-              >
-                <span>Officer Login (/admin)</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="relative z-10 bg-slate-950 border-t border-slate-800/80 py-3 sm:py-4 text-center text-xs text-slate-500">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-1.5 sm:gap-2">
-          <span>Official Police Intake System • Firebase & Cloudinary Live</span>
-          <span className="text-slate-400 font-mono text-[11px]">Bauan PNP Investigation & Records</span>
-        </div>
-      </footer>
-
-      {/* QR Code Modal */}
+    <>
+      <PublicIntakeWizard
+        onSubmitSuccess={handlePublicSubmission}
+        onNavigateToAdmin={() => navigateTo('/admin')}
+      />
       <QRCodeModal
         isOpen={isQRModalOpen}
         onClose={() => setIsQRModalOpen(false)}
       />
-
-      {/* PWA Offline Connectivity Indicator */}
       <OfflineIndicator />
-    </div>
+    </>
   );
 }

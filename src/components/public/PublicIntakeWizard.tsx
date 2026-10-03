@@ -170,16 +170,18 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             <PWAInstallButton />
             {onNavigateToAdmin && (
               <button
                 type="button"
                 onClick={onNavigateToAdmin}
-                className="text-xs text-blue-200 hover:text-white px-2 py-1 rounded hover:bg-blue-900 transition-colors border border-blue-800 cursor-pointer"
-                title="Officer Portal"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-900/70 hover:bg-blue-800 text-blue-200 hover:text-white rounded-lg text-xs font-semibold border border-blue-700/70 transition-colors cursor-pointer shadow-xs"
+                title="Authorized PNP Police Personnel Login"
               >
-                Admin
+                <Lock className="w-3.5 h-3.5 text-blue-300" />
+                <span className="hidden xs:inline">Officer Login</span>
+                <span className="xs:hidden">Login</span>
               </button>
             )}
           </div>

@@ -126,6 +126,17 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
               <span>Login with Password</span>
             </button>
           </form>
+
+          {/* Return to Public Portal */}
+          <div className="mt-5 pt-4 border-t border-slate-700/80 text-center">
+            <button
+              type="button"
+              onClick={onNavigateToPublic}
+              className="text-xs text-blue-300 hover:text-white transition-colors underline-offset-4 hover:underline cursor-pointer font-medium"
+            >
+              ← Return to Citizen Intake Portal
+            </button>
+          </div>
         </div>
       </div>
     </div>

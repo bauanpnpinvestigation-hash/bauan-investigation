@@ -32,8 +32,8 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
   stationName = 'Investigation & Records Section',
 }) => {
   const defaultHostUrl = typeof window !== 'undefined' 
-    ? `${window.location.origin}/request` 
-    : 'https://ais-dev.run.app/request';
+    ? `${window.location.origin}/` 
+    : 'https://ais-dev.run.app/';
 
   // Target URL that the QR code points to
   const [targetUrl, setTargetUrl] = useState<string>(() => {
