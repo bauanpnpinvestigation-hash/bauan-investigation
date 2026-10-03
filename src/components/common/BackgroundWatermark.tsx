@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import logoTransparent from '../../assets/images/bauan_mps_logo_transparent.png';
 
 interface BackgroundWatermarkProps {
   opacity?: number;
@@ -6,13 +7,15 @@ interface BackgroundWatermarkProps {
   theme?: 'dark' | 'light' | 'auto';
 }
 
-const LOGO_SRC = '/src/assets/images/bauan_mps_logo_transparent.png';
+const FALLBACK_PUBLIC_LOGO = '/bauan_mps_logo_transparent.png';
 
 export const BackgroundWatermark: React.FC<BackgroundWatermarkProps> = ({
   opacity,
   className = '',
   theme = 'dark',
 }) => {
+  const [imgSrc, setImgSrc] = useState<string>(logoTransparent || FALLBACK_PUBLIC_LOGO);
+
   // Enhanced visibility: Gives the emblem a bold, resilient, authoritative presence
   // with 100% transparent outer background (zero white borders/corners)
   const defaultOpacityClass = theme === 'dark' 
@@ -37,12 +40,13 @@ export const BackgroundWatermark: React.FC<BackgroundWatermarkProps> = ({
         style={opacity !== undefined ? { opacity } : undefined}
       >
         <img
-          src={LOGO_SRC}
+          src={imgSrc}
           alt=""
           role="presentation"
           referrerPolicy="no-referrer"
           loading="eager"
           decoding="async"
+          onError={() => setImgSrc(FALLBACK_PUBLIC_LOGO)}
           className="w-full h-full object-contain filter contrast-125 saturate-125 drop-shadow-2xl"
         />
       </div>

@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { Shield } from 'lucide-react';
+import logoTransparent from '../../assets/images/bauan_mps_logo_transparent.png';
 
 interface BrandLogoProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-const LOGO_SRC = '/src/assets/images/bauan_mps_logo_transparent.png';
+const FALLBACK_PUBLIC_LOGO = '/bauan_mps_logo_transparent.png';
 
 export const BrandLogo: React.FC<BrandLogoProps> = ({
   className = '',
   size = 'md',
 }) => {
+  const [imgSrc, setImgSrc] = useState<string>(logoTransparent || FALLBACK_PUBLIC_LOGO);
   const [hasError, setHasError] = useState(false);
 
   const sizeClasses = {
@@ -43,11 +45,17 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
       className={`${sizeClasses[size]} rounded-full overflow-hidden bg-blue-950 border border-amber-400/60 shadow-md flex items-center justify-center shrink-0 ${className}`}
     >
       <img
-        src={LOGO_SRC}
+        src={imgSrc}
         alt="Bauan MPS Logo"
         className="w-full h-full object-cover"
         referrerPolicy="no-referrer"
-        onError={() => setHasError(true)}
+        onError={() => {
+          if (imgSrc !== FALLBACK_PUBLIC_LOGO) {
+            setImgSrc(FALLBACK_PUBLIC_LOGO);
+          } else {
+            setHasError(true);
+          }
+        }}
       />
     </div>
   );
