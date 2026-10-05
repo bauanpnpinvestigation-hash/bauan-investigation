@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, Lock, AlertCircle, Eye, EyeOff, KeyRound } from 'lucide-react';
-import { signInAdminWithPassword } from '../../services/firebase';
+import { signInAdminWithPassword, connectGoogleDriveAccount } from '../../services/firebase';
 import { BrandLogo } from '../common/BrandLogo';
 import { BackgroundWatermark } from '../common/BackgroundWatermark';
 
@@ -17,7 +17,27 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleGoogleLogin = async () => {
+    setErrorMsg(null);
+    setIsGoogleLoading(true);
+    try {
+      const result = await connectGoogleDriveAccount();
+      if (result) {
+        onLoginSuccess(result.user.email || 'Officer');
+      }
+    } catch (err: any) {
+      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+        return;
+      }
+      console.error('[Google Sign in error]', err);
+      setErrorMsg(err.message || 'Google authentication failed. Please try again.');
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +86,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
           BAUAN MPS - INVESTIGATION SECTION
         </h2>
         <p className="mt-1 text-xs font-semibold text-blue-300 uppercase tracking-widest">
-          Secure Officer Login
+          Secure Officer Login & Drive Access
         </p>
       </div>
 
@@ -78,6 +98,44 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
               <span className="leading-relaxed font-semibold">{errorMsg}</span>
             </div>
           )}
+
+          {/* Official Google Sign-in Button with Workspace Drive Integration */}
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={isGoogleLoading || isLoading}
+              className="gsi-material-button w-full cursor-pointer transition-all hover:scale-[1.01] shadow-md flex justify-center"
+            >
+              <div className="gsi-material-button-state"></div>
+              <div className="gsi-material-button-content-wrapper">
+                <div className="gsi-material-button-icon">
+                  <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style={{ display: 'block' }}>
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                    <path fill="none" d="M0 0h48v48H0z"></path>
+                  </svg>
+                </div>
+                <span className="gsi-material-button-contents">
+                  {isGoogleLoading ? 'Connecting to Google Drive...' : 'Sign in with Google (Drive Access)'}
+                </span>
+              </div>
+            </button>
+            <p className="text-[10px] text-slate-400 text-center">
+              Connects directly with Bauan MPS Google Drive Evidence Vault
+            </p>
+          </div>
+
+          {/* Divider */}
+          <div className="relative flex items-center justify-center">
+            <div className="border-t border-slate-700 w-full" />
+            <span className="bg-slate-800 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
+              Or Officer Password
+            </span>
+            <div className="border-t border-slate-700 w-full" />
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off" noValidate>
             <div>
@@ -96,7 +154,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                 autoCapitalize="none"
                 spellCheck="false"
                 data-lpignore="true"
-                disabled={isLoading}
+                disabled={isLoading || isGoogleLoading}
                 className="w-full px-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
               />
             </div>
@@ -115,7 +173,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                   placeholder="Enter administrator key"
                   autoComplete="new-password"
                   data-lpignore="true"
-                  disabled={isLoading}
+                  disabled={isLoading || isGoogleLoading}
                   className="w-full pl-3.5 pr-11 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                 />
                 <button
@@ -135,11 +193,11 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
 
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl shadow-lg text-xs font-extrabold uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-500 cursor-pointer border border-blue-500 active:scale-[0.99] transition-all disabled:opacity-50 disabled:pointer-events-none"
+              disabled={isLoading || isGoogleLoading}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl shadow-lg text-xs font-extrabold uppercase tracking-wider text-white bg-blue-700 hover:bg-blue-600 cursor-pointer border border-blue-600 active:scale-[0.99] transition-all disabled:opacity-50 disabled:pointer-events-none"
             >
               <KeyRound className="w-4 h-4" />
-              <span>{isLoading ? 'Verifying Credentials...' : 'Login with Password'}</span>
+              <span>{isLoading ? 'Verifying Credentials...' : 'Login with Officer Password'}</span>
             </button>
           </form>
 
@@ -158,3 +216,4 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
     </div>
   );
 };
+

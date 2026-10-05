@@ -16,11 +16,12 @@ try {
   admin.initializeApp({
     projectId: firebaseConfig.projectId,
   });
-  firestoreDb = getFirestore();
+  const customDbId = (firebaseConfig as any).firestoreDatabaseId || 'ai-studio-secureintakeinci-4859897c-4938-4807-b45d-70752f46139d';
+  firestoreDb = getFirestore(customDbId);
   adminAuthInstance = getAuth();
-  console.log('[Backend] Firebase Admin initialized successfully.');
+  console.log('[Backend] Firebase Admin initialized with database:', customDbId);
 } catch (err) {
-  console.warn('[Backend] Firebase Admin default initialization failed. Falling back to local database emulation.', err);
+  console.warn('[Backend] Firebase Admin initialization notice:', err);
 }
 
 // Highly resilient local in-memory fallback database to ensure 0-error preview runtime

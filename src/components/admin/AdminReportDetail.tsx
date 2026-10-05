@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ReportSubmission, ReportStatus } from '../../types/reports';
 import { REPORT_TYPES } from '../../config/reportTypes';
 import { CopyButton } from '../common/CopyButton';
@@ -8,6 +8,19 @@ import { StatusBadge } from '../common/StatusBadge';
 import { DynamicReportFields } from '../form/DynamicReportFields';
 import { formatPersonalInformationText, formatSectionText } from '../../utils/formatters';
 import { formatHumanDate, formatHumanDateTime } from '../../utils/dateUtils';
+import { 
+  getGoogleDriveAccessToken, 
+  connectGoogleDriveAccount 
+} from '../../services/firebase';
+import { 
+  listGoogleDriveFiles, 
+  uploadFileToGoogleDrive, 
+  deleteFileFromGoogleDrive, 
+  DriveRecordFile, 
+  DRIVE_CLASSIFICATIONS, 
+  getFileTypeBadge, 
+  formatFileSize 
+} from '../../services/googleDrive';
 import { 
   ArrowLeft, 
   FileText, 
@@ -24,7 +37,12 @@ import {
   FileEdit,
   ClipboardList,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  HardDrive,
+  UploadCloud,
+  ExternalLink,
+  Plus,
+  RefreshCw
 } from 'lucide-react';
 
 interface AdminReportDetailProps {
@@ -57,6 +75,95 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
   const [isEditingInvestigation, setIsEditingInvestigation] = useState(false);
   const [editableReportData, setEditableReportData] = useState<Record<string, any>>(report.reportData || {});
   const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
+
+  // Google Drive Integration for this specific Case
+  const [driveFiles, setDriveFiles] = useState<DriveRecordFile[]>([]);
+  const [isLoadingDrive, setIsLoadingDrive] = useState(false);
+  const [isDriveConnected, setIsDriveConnected] = useState<boolean>(() => !!getGoogleDriveAccessToken());
+  const [showDriveUpload, setShowDriveUpload] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadCategory, setUploadCategory] = useState<string>(DRIVE_CLASSIFICATIONS[0].id);
+  const [uploadNotes, setUploadNotes] = useState<string>('');
+  const [isUploadingDrive, setIsUploadingDrive] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<DriveRecordFile | null>(null);
+  const [isDeletingDriveFile, setIsDeletingDriveFile] = useState(false);
+
+  const loadCaseDriveFiles = async () => {
+    const token = getGoogleDriveAccessToken();
+    if (!token) {
+      setIsDriveConnected(false);
+      return;
+    }
+    setIsDriveConnected(true);
+    setIsLoadingDrive(true);
+    try {
+      const files = await listGoogleDriveFiles({
+        incidentRef: report.referenceNumber,
+      });
+      setDriveFiles(files);
+    } catch (err) {
+      console.warn('[Google Drive Report Detail Error]', err);
+    } finally {
+      setIsLoadingDrive(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCaseDriveFiles();
+  }, [report.referenceNumber]);
+
+  const handleConnectDrive = async () => {
+    try {
+      const result = await connectGoogleDriveAccount();
+      if (result) {
+        setIsDriveConnected(true);
+        await loadCaseDriveFiles();
+      }
+    } catch (err: any) {
+      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+        return;
+      }
+      alert(err.message || 'Google Drive connection failed.');
+    }
+  };
+
+  const handleUploadCaseDriveFile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadFile) return;
+    setIsUploadingDrive(true);
+    try {
+      await uploadFileToGoogleDrive({
+        file: uploadFile,
+        categoryId: uploadCategory,
+        incidentRef: report.referenceNumber,
+        incidentTitle: `${report.reportType.toUpperCase()} - ${report.personalInformation.lastName}, ${report.personalInformation.firstName}`,
+        notes: uploadNotes,
+        officerEmail: currentAdminEmail,
+      });
+      setShowDriveUpload(false);
+      setUploadFile(null);
+      setUploadNotes('');
+      await loadCaseDriveFiles();
+    } catch (err: any) {
+      alert(err.message || 'Failed to upload to Google Drive.');
+    } finally {
+      setIsUploadingDrive(false);
+    }
+  };
+
+  const handleConfirmDeleteDriveFile = async () => {
+    if (!fileToDelete) return;
+    setIsDeletingDriveFile(true);
+    try {
+      await deleteFileFromGoogleDrive(fileToDelete.id);
+      setDriveFiles((prev) => prev.filter((f) => f.id !== fileToDelete.id));
+      setFileToDelete(null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete file from Google Drive.');
+    } finally {
+      setIsDeletingDriveFile(false);
+    }
+  };
 
   const reportConfig = REPORT_TYPES[report.reportType];
   const personalInfo = report.personalInformation;
@@ -539,6 +646,133 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
 
         {/* Right 1 Column: Attachments, Internal Admin Notes & Audit Log */}
         <div className="space-y-6">
+          {/* GOOGLE DRIVE CASE DOCUMENTS (CLASSIFIED WORD/PDF VAULT) */}
+          <div className="bg-white rounded-xl border border-blue-200 shadow-xs overflow-hidden">
+            <div className="px-5 py-3 bg-blue-950 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-blue-400" />
+                <h3 className="text-xs font-black uppercase tracking-wider">
+                  Google Drive Case Files ({driveFiles.length})
+                </h3>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {isDriveConnected && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDriveUpload(true)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add File</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={loadCaseDriveFiles}
+                  title="Refresh case drive files"
+                  className="p-1 text-blue-300 hover:text-white rounded transition-colors cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingDrive ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-3">
+              {!isDriveConnected ? (
+                <div className="text-center py-4 space-y-2">
+                  <p className="text-xs text-slate-600">
+                    Connect Google Drive to attach Word documents (.docx), PDFs, and sworn statements to this case.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleConnectDrive}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold rounded-lg shadow-xs cursor-pointer"
+                  >
+                    <HardDrive className="w-3.5 h-3.5" />
+                    <span>Connect Google Drive</span>
+                  </button>
+                </div>
+              ) : isLoadingDrive ? (
+                <div className="text-center py-4 space-y-2 text-xs text-slate-500">
+                  <span className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin inline-block" />
+                  <p>Searching Google Drive for case files...</p>
+                </div>
+              ) : driveFiles.length === 0 ? (
+                <div className="text-center py-4 space-y-2">
+                  <p className="text-xs text-slate-400 italic">No Google Drive documents attached to #{report.referenceNumber} yet.</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowDriveUpload(true)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 text-xs font-bold rounded-lg border border-blue-200 cursor-pointer"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>Upload Case Word/PDF to Drive</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {driveFiles.map((df) => {
+                    const badge = getFileTypeBadge(df.mimeType, df.name);
+                    const catObj = DRIVE_CLASSIFICATIONS.find((c) => c.id === df.properties?.category);
+                    return (
+                      <div
+                        key={df.id}
+                        className="p-3 bg-slate-50 hover:bg-blue-50/40 border border-slate-200 rounded-xl space-y-1.5 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${badge.bg} ${badge.text}`}>
+                              {badge.label}
+                            </span>
+                            {catObj && (
+                              <span className="text-[10px] font-bold text-slate-600">
+                                {catObj.name}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {df.webViewLink && (
+                              <a
+                                href={df.webViewLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1 text-slate-400 hover:text-blue-700 hover:bg-blue-100/60 rounded"
+                                title="Open in Google Drive"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setFileToDelete(df)}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
+                              title="Delete from Google Drive"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <p className="text-xs font-bold text-slate-900 truncate" title={df.name}>
+                          {df.name}
+                        </p>
+                        {df.properties?.notes && (
+                          <p className="text-[10px] text-slate-500 italic truncate">
+                            "{df.properties.notes}"
+                          </p>
+                        )}
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-200/60">
+                          <span>{formatFileSize(df.size)}</span>
+                          <span>{formatHumanDateTime(df.modifiedTime || df.createdTime)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* ATTACHMENTS */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="px-5 py-3 bg-slate-50 border-b border-slate-200">
@@ -806,6 +1040,147 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Case Google Drive File Upload Modal */}
+      {showDriveUpload && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-fadeIn">
+          <div className="relative bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <HardDrive className="w-5 h-5 text-blue-600" />
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">
+                    Upload Case File to Google Drive
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Ref #{report.referenceNumber}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isUploadingDrive && setShowDriveUpload(false)}
+                disabled={isUploadingDrive}
+                className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUploadCaseDriveFile} className="space-y-3.5">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Document / Evidence File <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="file"
+                  required
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setUploadFile(e.target.files[0]);
+                    }
+                  }}
+                  accept=".doc,.docx,.pdf,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.zip"
+                  className="w-full text-xs text-slate-700 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-900 hover:file:bg-blue-100 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Classification Category <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={uploadCategory}
+                  onChange={(e) => setUploadCategory(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
+                >
+                  {DRIVE_CLASSIFICATIONS.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      [{cat.code}] {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Notes / Document Summary
+                </label>
+                <textarea
+                  rows={2}
+                  value={uploadNotes}
+                  onChange={(e) => setUploadNotes(e.target.value)}
+                  placeholder="e.g. Sworn affidavit of witness taken on Oct 5..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowDriveUpload(false)}
+                  disabled={isUploadingDrive}
+                  className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUploadingDrive || !uploadFile}
+                  className="px-4 py-2 bg-blue-900 hover:bg-blue-950 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isUploadingDrive ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Saving to Drive...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      <span>Upload to Google Drive</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Drive File Confirmation Dialog */}
+      {fileToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-fadeIn">
+          <div className="relative bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 text-center space-y-3">
+            <div className="w-10 h-10 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center mx-auto">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-900">
+              Delete File from Google Drive?
+            </h3>
+            <p className="text-xs text-slate-600">
+              Are you sure you want to delete <strong className="text-slate-900">{fileToDelete.name}</strong> from Google Drive?
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setFileToDelete(null)}
+                disabled={isDeletingDriveFile}
+                className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteDriveFile}
+                disabled={isDeletingDriveFile}
+                className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-sm cursor-pointer"
+              >
+                {isDeletingDriveFile ? 'Deleting...' : 'Delete File'}
+              </button>
             </div>
           </div>
         </div>

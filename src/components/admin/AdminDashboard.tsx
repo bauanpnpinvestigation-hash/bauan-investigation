@@ -25,8 +25,11 @@ import {
   Database,
   Trash2,
   AlertTriangle,
-  X
+  X,
+  HardDrive,
+  FolderLock
 } from 'lucide-react';
+import { GoogleDriveVault } from './GoogleDriveVault';
 
 interface AdminDashboardProps {
   reports: ReportSubmission[];
@@ -51,6 +54,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeleteReport,
   onEraseDatabase,
 }) => {
+  const [mainView, setMainView] = useState<'REPORTS' | 'GOOGLE_DRIVE'>('REPORTS');
   const [activeTab, setActiveTab] = useState<TabType>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('ALL');
@@ -196,6 +200,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* Google Drive Vault Direct Access Button */}
+            <button
+              type="button"
+              onClick={() => setMainView('GOOGLE_DRIVE')}
+              className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors border cursor-pointer ${
+                mainView === 'GOOGLE_DRIVE'
+                  ? 'bg-blue-600 border-blue-500 text-white ring-2 ring-blue-400/40'
+                  : 'bg-slate-800 hover:bg-slate-700 text-blue-300 border-slate-700'
+              }`}
+              title="Open Google Drive Evidence Vault"
+            >
+              <HardDrive className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden md:inline">Drive Vault</span>
+            </button>
+
             {/* PWA Install Button */}
             <PWAInstallButton />
 
@@ -242,8 +261,55 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Main Content Area */}
       <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
-        {/* SUMMARY STAT CARDS (Compact layout) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+        {/* Primary Admin Navigation Switcher: Intake Reports vs Google Drive Vault */}
+        <div className="bg-white rounded-2xl p-2 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          <div className="flex gap-1.5 p-1 bg-slate-100/90 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setMainView('REPORTS')}
+              className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                mainView === 'REPORTS'
+                  ? 'bg-blue-900 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              <span>Incident Intake Records ({reports.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMainView('GOOGLE_DRIVE')}
+              className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                mainView === 'GOOGLE_DRIVE'
+                  ? 'bg-blue-900 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <HardDrive className="w-4 h-4 text-blue-400" />
+              <span>Google Drive Document Vault</span>
+              <span className="bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded text-[10px] font-black uppercase">
+                Word & PDF
+              </span>
+            </button>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-2 px-3 text-xs text-slate-500 font-medium">
+            <Shield className="w-3.5 h-3.5 text-blue-700" />
+            <span>Classified Police Administrator Storage</span>
+          </div>
+        </div>
+
+        {mainView === 'GOOGLE_DRIVE' ? (
+          <GoogleDriveVault
+            reports={reports}
+            currentAdminEmail={currentAdminEmail}
+            onSelectIncidentReport={onViewReport}
+          />
+        ) : (
+          <>
+            {/* SUMMARY STAT CARDS (Compact layout) */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           {/* Card: NEW */}
           <div 
             onClick={() => setActiveTab('NEW')}
@@ -701,6 +767,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </>
           )}
         </div>
+          </>
+        )}
       </main>
 
       {/* CONFIRMED SINGLE RECORD DELETE MODAL */}

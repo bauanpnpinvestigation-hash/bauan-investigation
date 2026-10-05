@@ -3,6 +3,8 @@ import {
   getAuth, 
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut as firebaseSignOut, 
   onAuthStateChanged, 
   User 
@@ -42,8 +44,10 @@ export function getActiveFirebaseConfig() {
 const app = getApps().length === 0 ? initializeApp(activeConfig) : getApp();
 
 // Database initialization: Configured with multi-tab persistent local cache
-// Drastically cuts Firestore read quotas on Netlify and reloads by caching documents in browser IndexedDB
-const dbId = activeConfig.firestoreDatabaseId || '(default)';
+// Pointing directly to custom database ID: ai-studio-secureintakeinci-4859897c-4938-4807-b45d-70752f46139d
+export const TARGET_DATABASE_ID =
+  (activeConfig as any).firestoreDatabaseId ||
+  'ai-studio-secureintakeinci-4859897c-4938-4807-b45d-70752f46139d';
 
 let firestoreInstance;
 try {
@@ -51,13 +55,82 @@ try {
     localCache: persistentLocalCache({
       tabManager: persistentMultipleTabManager()
     })
-  }, dbId);
+  }, TARGET_DATABASE_ID);
 } catch {
-  firestoreInstance = getFirestore(app, dbId);
+  firestoreInstance = getFirestore(app, TARGET_DATABASE_ID);
 }
 
 export const db = firestoreInstance;
 export const auth = getAuth(app);
+
+// ---------------------------------------------------------------------------
+// Google Workspace / Google Drive OAuth Configuration
+// ---------------------------------------------------------------------------
+export const GOOGLE_DRIVE_SCOPES = [
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/drive',
+];
+
+const googleProvider = new GoogleAuthProvider();
+GOOGLE_DRIVE_SCOPES.forEach((scope) => googleProvider.addScope(scope));
+// Force prompt to ensure refresh token / account selection if needed
+googleProvider.setCustomParameters({
+  prompt: 'select_account',
+  access_type: 'offline',
+});
+
+// Strict In-Memory Access Token Cache (never stored in localStorage/sessionStorage)
+let cachedGoogleDriveAccessToken: string | null = null;
+let tokenExpiryTimestamp: number = 0;
+
+export function getGoogleDriveAccessToken(): string | null {
+  if (!cachedGoogleDriveAccessToken) return null;
+  // If token is near expiry (within 1 min), still return but it will be refreshed if needed
+  return cachedGoogleDriveAccessToken;
+}
+
+export function setGoogleDriveAccessToken(token: string | null, expiresInSeconds: number = 3500) {
+  cachedGoogleDriveAccessToken = token;
+  tokenExpiryTimestamp = Date.now() + (expiresInSeconds * 1000);
+}
+
+// Clear in-memory token when user logs out
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    cachedGoogleDriveAccessToken = null;
+    tokenExpiryTimestamp = 0;
+  }
+});
+
+/**
+ * Sign in officer or connect Google Drive account using Google Auth Popup
+ */
+export async function connectGoogleDriveAccount(): Promise<{ user: User; accessToken: string } | null> {
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const accessToken = credential?.accessToken;
+
+    if (!accessToken) {
+      throw new Error('Google Drive access token was not returned by Google authentication.');
+    }
+
+    setGoogleDriveAccessToken(accessToken);
+    await ensureAdminProfileInFirestore(result.user);
+
+    return {
+      user: result.user,
+      accessToken,
+    };
+  } catch (error: any) {
+    if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
+      console.info('[Google Drive Auth] Sign-in popup was closed by user.');
+      return null;
+    }
+    console.error('[Google Drive Auth Error]', error);
+    throw error;
+  }
+}
 
 /**
  * Utility to verify Firestore connectivity
