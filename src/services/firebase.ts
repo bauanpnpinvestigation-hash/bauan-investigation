@@ -43,24 +43,12 @@ export function getActiveFirebaseConfig() {
 // 1. Initialize Firebase App directly with official project credentials
 const app = getApps().length === 0 ? initializeApp(activeConfig) : getApp();
 
-// Database initialization: Configured with multi-tab persistent local cache
-// Pointing directly to custom database ID: ai-studio-secureintakeinci-4859897c-4938-4807-b45d-70752f46139d
+// Database initialization: Pointing directly to custom database ID
 export const TARGET_DATABASE_ID =
   (activeConfig as any).firestoreDatabaseId ||
   'ai-studio-secureintakeinci-4859897c-4938-4807-b45d-70752f46139d';
 
-let firestoreInstance;
-try {
-  firestoreInstance = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager()
-    })
-  }, TARGET_DATABASE_ID);
-} catch {
-  firestoreInstance = getFirestore(app, TARGET_DATABASE_ID);
-}
-
-export const db = firestoreInstance;
+export const db = getFirestore(app, TARGET_DATABASE_ID);
 export const auth = getAuth(app);
 
 // ---------------------------------------------------------------------------
@@ -73,32 +61,51 @@ export const GOOGLE_DRIVE_SCOPES = [
 
 const googleProvider = new GoogleAuthProvider();
 GOOGLE_DRIVE_SCOPES.forEach((scope) => googleProvider.addScope(scope));
-// Force prompt to ensure refresh token / account selection if needed
 googleProvider.setCustomParameters({
   prompt: 'select_account',
-  access_type: 'offline',
 });
 
 // Strict In-Memory Access Token Cache (never stored in localStorage/sessionStorage)
+let isSigningIn = false;
 let cachedGoogleDriveAccessToken: string | null = null;
 let tokenExpiryTimestamp: number = 0;
 
+type DriveTokenListener = (token: string | null) => void;
+const driveTokenListeners = new Set<DriveTokenListener>();
+
+function notifyDriveTokenListeners(token: string | null) {
+  driveTokenListeners.forEach((listener) => {
+    try {
+      listener(token);
+    } catch (e) {
+      console.error('[Drive Token Listener Error]', e);
+    }
+  });
+}
+
+export function subscribeToGoogleDriveToken(listener: DriveTokenListener): () => void {
+  driveTokenListeners.add(listener);
+  listener(cachedGoogleDriveAccessToken);
+  return () => {
+    driveTokenListeners.delete(listener);
+  };
+}
+
 export function getGoogleDriveAccessToken(): string | null {
   if (!cachedGoogleDriveAccessToken) return null;
-  // If token is near expiry (within 1 min), still return but it will be refreshed if needed
   return cachedGoogleDriveAccessToken;
 }
 
 export function setGoogleDriveAccessToken(token: string | null, expiresInSeconds: number = 3500) {
   cachedGoogleDriveAccessToken = token;
-  tokenExpiryTimestamp = Date.now() + (expiresInSeconds * 1000);
+  tokenExpiryTimestamp = token ? Date.now() + (expiresInSeconds * 1000) : 0;
+  notifyDriveTokenListeners(cachedGoogleDriveAccessToken);
 }
 
 // Clear in-memory token when user logs out
 onAuthStateChanged(auth, (user) => {
-  if (!user) {
-    cachedGoogleDriveAccessToken = null;
-    tokenExpiryTimestamp = 0;
+  if (!user && !isSigningIn) {
+    setGoogleDriveAccessToken(null);
   }
 });
 
@@ -107,16 +114,21 @@ onAuthStateChanged(auth, (user) => {
  */
 export async function connectGoogleDriveAccount(): Promise<{ user: User; accessToken: string } | null> {
   try {
+    isSigningIn = true;
     const result = await signInWithPopup(auth, googleProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
-    const accessToken = credential?.accessToken;
+    const accessToken = credential?.accessToken || (result as any)?._tokenResponse?.oauthAccessToken;
 
     if (!accessToken) {
       throw new Error('Google Drive access token was not returned by Google authentication.');
     }
 
     setGoogleDriveAccessToken(accessToken);
-    await ensureAdminProfileInFirestore(result.user);
+
+    // Non-blocking background sync of admin profile so Google Drive login returns immediately
+    ensureAdminProfileInFirestore(result.user).catch((err) => {
+      console.warn('[Firestore] Background admin profile sync notice:', err);
+    });
 
     return {
       user: result.user,
@@ -129,6 +141,8 @@ export async function connectGoogleDriveAccount(): Promise<{ user: User; accessT
     }
     console.error('[Google Drive Auth Error]', error);
     throw error;
+  } finally {
+    isSigningIn = false;
   }
 }
 
@@ -248,8 +262,7 @@ export async function signInAdminWithPassword(email: string, password: string): 
   const cleanEmail = email.trim();
   try {
     const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
-    // Write admin record to Firestore /admins/{uid}
-    await ensureAdminProfileInFirestore(userCredential.user);
+    ensureAdminProfileInFirestore(userCredential.user).catch(() => {});
     return userCredential.user;
   } catch (err: any) {
     if (
@@ -259,7 +272,7 @@ export async function signInAdminWithPassword(email: string, password: string): 
       if (cleanEmail.toLowerCase() === AUTHORIZED_ADMIN_EMAIL.toLowerCase()) {
         try {
           const newCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-          await ensureAdminProfileInFirestore(newCredential.user);
+          ensureAdminProfileInFirestore(newCredential.user).catch(() => {});
           return newCredential.user;
         } catch (createErr) {
           console.warn('Auto-registration attempt notice:', createErr);

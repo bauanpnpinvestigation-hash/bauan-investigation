@@ -10,7 +10,8 @@ import { formatPersonalInformationText, formatSectionText } from '../../utils/fo
 import { formatHumanDate, formatHumanDateTime } from '../../utils/dateUtils';
 import { 
   getGoogleDriveAccessToken, 
-  connectGoogleDriveAccount 
+  connectGoogleDriveAccount,
+  subscribeToGoogleDriveToken
 } from '../../services/firebase';
 import { 
   listGoogleDriveFiles, 
@@ -109,21 +110,30 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
   };
 
   useEffect(() => {
-    loadCaseDriveFiles();
-  }, [report.referenceNumber]);
+    const unsubscribe = subscribeToGoogleDriveToken((token) => {
+      setIsDriveConnected(!!token);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (isDriveConnected) {
+      loadCaseDriveFiles();
+    }
+  }, [report.referenceNumber, isDriveConnected]);
 
   const handleConnectDrive = async () => {
     try {
       const result = await connectGoogleDriveAccount();
       if (result) {
         setIsDriveConnected(true);
-        await loadCaseDriveFiles();
+        loadCaseDriveFiles();
       }
     } catch (err: any) {
       if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
         return;
       }
-      alert(err.message || 'Google Drive connection failed.');
+      console.error('[Google Drive Connect Error]', err);
     }
   };
 

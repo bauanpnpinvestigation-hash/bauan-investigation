@@ -27,9 +27,15 @@ import {
   AlertTriangle,
   X,
   HardDrive,
-  FolderLock
+  FolderLock,
+  UploadCloud
 } from 'lucide-react';
 import { GoogleDriveVault } from './GoogleDriveVault';
+import { 
+  getGoogleDriveAccessToken, 
+  connectGoogleDriveAccount, 
+  subscribeToGoogleDriveToken 
+} from '../../services/firebase';
 
 interface AdminDashboardProps {
   reports: ReportSubmission[];
@@ -55,7 +61,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onEraseDatabase,
 }) => {
   const [mainView, setMainView] = useState<'REPORTS' | 'GOOGLE_DRIVE'>('REPORTS');
+  const [isDriveConnected, setIsDriveConnected] = useState<boolean>(() => !!getGoogleDriveAccessToken());
+  const [isConnectingDrive, setIsConnectingDrive] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<TabType>('ALL');
+
+  useEffect(() => {
+    const unsubscribe = subscribeToGoogleDriveToken((token) => {
+      setIsDriveConnected(!!token);
+      if (token) {
+        setIsConnectingDrive(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleQuickConnectOrOpenDrive = async () => {
+    if (isDriveConnected) {
+      setMainView('GOOGLE_DRIVE');
+      return;
+    }
+    setIsConnectingDrive(true);
+    try {
+      const result = await connectGoogleDriveAccount();
+      setIsConnectingDrive(false);
+      if (result) {
+        setIsDriveConnected(true);
+        setMainView('GOOGLE_DRIVE');
+      }
+    } catch (err: any) {
+      setIsConnectingDrive(false);
+      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+        return;
+      }
+      console.error('[Dashboard Drive Connect Error]', err);
+    }
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
@@ -294,9 +334,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 px-3 text-xs text-slate-500 font-medium">
-            <Shield className="w-3.5 h-3.5 text-blue-700" />
-            <span>Classified Police Administrator Storage</span>
+          <div className="flex items-center justify-end gap-2 px-2">
+            {isDriveConnected ? (
+              <button
+                type="button"
+                onClick={() => setMainView('GOOGLE_DRIVE')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Google Drive Connected</span>
+                <UploadCloud className="w-3.5 h-3.5 ml-1 text-emerald-700" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleQuickConnectOrOpenDrive}
+                disabled={isConnectingDrive}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                <HardDrive className="w-3.5 h-3.5 text-blue-700" />
+                <span>{isConnectingDrive ? 'Connecting...' : 'Sign in to Google Drive'}</span>
+              </button>
+            )}
           </div>
         </div>
 

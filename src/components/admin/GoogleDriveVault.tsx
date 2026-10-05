@@ -12,6 +12,7 @@ import {
 import { 
   getGoogleDriveAccessToken, 
   connectGoogleDriveAccount, 
+  subscribeToGoogleDriveToken,
   AUTHORIZED_ADMIN_EMAIL 
 } from '../../services/firebase';
 import { ReportSubmission } from '../../types/reports';
@@ -113,34 +114,49 @@ export const GoogleDriveVault: React.FC<GoogleDriveVaultProps> = ({
     }
   };
 
+  // Listen to token changes across the app (e.g., if officer signed in via Google on login screen)
+  useEffect(() => {
+    const unsubscribe = subscribeToGoogleDriveToken((token) => {
+      const connected = !!token;
+      setIsConnected(connected);
+      if (connected) {
+        setIsConnecting(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   useEffect(() => {
     const token = getGoogleDriveAccessToken();
     setIsConnected(!!token);
     if (token) {
       fetchFiles();
     }
-  }, [selectedCategory, filterIncidentRef]);
+  }, [selectedCategory, filterIncidentRef, isConnected]);
 
   // Connect and Upload Action
   const handleOpenUploadWithAuth = async () => {
     if (!isConnected) {
       setIsConnecting(true);
+      const timer = setTimeout(() => setIsConnecting(false), 20000);
       try {
         const result = await connectGoogleDriveAccount();
+        clearTimeout(timer);
+        setIsConnecting(false);
         if (result) {
           setIsConnected(true);
           toast.success(`Connected to Google Drive as ${result.user.email || 'Officer'}`);
           setShowUploadModal(true);
-          await fetchFiles();
+          fetchFiles();
         }
       } catch (err: any) {
+        clearTimeout(timer);
+        setIsConnecting(false);
         if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
           return;
         }
         console.error('[Google Drive Connect Error]', err);
         toast.error(err.message || 'Google Drive connection failed. Please try again.');
-      } finally {
-        setIsConnecting(false);
       }
     } else {
       setShowUploadModal(true);
@@ -150,21 +166,24 @@ export const GoogleDriveVault: React.FC<GoogleDriveVaultProps> = ({
   // Connect Google Drive Action
   const handleConnectDrive = async () => {
     setIsConnecting(true);
+    const timer = setTimeout(() => setIsConnecting(false), 20000);
     try {
       const result = await connectGoogleDriveAccount();
+      clearTimeout(timer);
+      setIsConnecting(false);
       if (result) {
         setIsConnected(true);
         toast.success(`Connected to Google Drive as ${result.user.email || 'Officer'}`);
-        await fetchFiles();
+        fetchFiles();
       }
     } catch (err: any) {
+      clearTimeout(timer);
+      setIsConnecting(false);
       if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
         return;
       }
       console.error('[Google Drive Connect Error]', err);
       toast.error(err.message || 'Google Drive connection failed. Please try again.');
-    } finally {
-      setIsConnecting(false);
     }
   };
 

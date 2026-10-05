@@ -102,15 +102,14 @@ app.use(express.json({ limit: '1mb' })); // strict request body size limit of 1M
 
 // 1. SECURITY HEADERS MIDDLEWARE
 app.use((req, res, next) => {
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
   
-  // Custom Content-Security-Policy (CSP)
+  // Content-Security-Policy (CSP) allowing Firebase Auth popup/iframe & Google Drive APIs
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.cloudinary.com https://api.qrserver.com https://lh3.googleusercontent.com https://www.google.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://api.cloudinary.com wss://*.firebaseio.com;"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com https://accounts.google.com https://*.firebaseapp.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; img-src 'self' data: blob: https: http:; font-src 'self' data: https://fonts.gstatic.com; frame-src 'self' https://*.firebaseapp.com https://*.google.com https://accounts.google.com https://apis.google.com https://content.googleapis.com; connect-src 'self' https://*.googleapis.com https://*.google.com https://accounts.google.com https://*.firebaseio.com https://*.firebaseapp.com https://api.cloudinary.com wss://*.firebaseio.com;"
   );
   next();
 });
@@ -488,7 +487,7 @@ async function run() {
   
   if (!isProd) {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: 'custom',
     });
     app.use(vite.middlewares);
