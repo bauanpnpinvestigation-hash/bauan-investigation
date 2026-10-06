@@ -24,12 +24,16 @@ import {
   UserCheck,
   ChevronRight,
   ChevronLeft,
-  X
+  X,
+  Scale,
+  HelpCircle,
+  ArrowRight
 } from 'lucide-react';
 
 interface PublicIntakeWizardProps {
   onSubmitSuccess?: (newSubmission: ReportSubmission) => void;
   onNavigateToAdmin?: () => void;
+  onNavigateToFAQ?: () => void;
 }
 
 const INITIAL_PERSONAL_INFO: PersonalInformation = {
@@ -50,6 +54,7 @@ const INITIAL_PERSONAL_INFO: PersonalInformation = {
 export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
   onSubmitSuccess,
   onNavigateToAdmin,
+  onNavigateToFAQ,
 }) => {
   // Pure Personal Information Flow: 1. Fill Info -> 2. Review -> 3. Success (Ref#)
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
@@ -178,12 +183,24 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            {onNavigateToFAQ && (
+              <button
+                type="button"
+                onClick={onNavigateToFAQ}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg text-xs font-extrabold transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+                title="Buksan ang Pahina ng Mga Madalas Itanong sa Kaso (FAQ Route)"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-slate-950 shrink-0" />
+                <span className="hidden xs:inline">FAQ at 15 Kaso</span>
+                <span className="xs:hidden">FAQ</span>
+              </button>
+            )}
             <PWAInstallButton />
             {onNavigateToAdmin && (
               <button
                 type="button"
                 onClick={onNavigateToAdmin}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-900/70 hover:bg-blue-800 text-blue-200 hover:text-white rounded-lg text-xs font-semibold border border-blue-700/70 transition-colors cursor-pointer shadow-xs"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-900/70 hover:bg-blue-800 text-blue-200 hover:text-white rounded-lg text-xs font-semibold border border-blue-700/70 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
                 title="Authorized PNP Police Personnel Login"
               >
                 <Lock className="w-3.5 h-3.5 text-blue-300" />
@@ -196,7 +213,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
       </header>
 
       {/* Main Container */}
-      <main className="relative z-10 flex-1 max-w-3xl w-full mx-auto p-4 sm:p-6 pb-24">
+      <main className="relative z-10 flex-1 max-w-3xl w-full mx-auto p-4 sm:p-6 pb-20 space-y-6">
         {/* Step Indicator Header (Steps 1 & 2) */}
         {currentStep < 3 && (
           <div className="mb-6 bg-white/75 rounded-xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
@@ -610,8 +627,8 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
           </div>
         </div>
       )}
-      {/* Magnificent Justice & Emergency Contacts Footer */}
-      <PublicFooter />
+      {/* Magnificent Justice & Emergency Contacts Footer (includes Top FAQ Ribbon) */}
+      <PublicFooter onNavigateToFAQ={onNavigateToFAQ} />
     </div>
   );
 };

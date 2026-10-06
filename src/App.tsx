@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PublicIntakeWizard } from './components/public/PublicIntakeWizard';
+import { PublicFAQPage } from './components/public/PublicFAQSection';
 import { AdminLogin } from './components/admin/AdminLogin';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AdminReportDetail } from './components/admin/AdminReportDetail';
@@ -401,6 +402,25 @@ export default function App() {
     );
   }
 
+  // Route: /faq or /faq/:caseId (Dedicated FAQ & Philippine Law 15 Cases Route)
+  if (currentPath.startsWith('/faq')) {
+    return (
+      <>
+        <PublicFAQPage
+          currentPath={currentPath}
+          onNavigateToPublic={() => navigateTo('/')}
+          onNavigateToAdmin={() => navigateTo('/admin')}
+          onNavigatePath={(path) => navigateTo(path)}
+        />
+        <QRCodeModal
+          isOpen={isQRModalOpen}
+          onClose={() => setIsQRModalOpen(false)}
+        />
+        <OfflineIndicator />
+      </>
+    );
+  }
+
   // PRIMARY MAIN FRONT: Directly opens Citizen Public Intake Wizard!
   // No pathway confusion when clients scan QR or open the app.
   // Officer login is discreetly located at top right header.
@@ -409,6 +429,7 @@ export default function App() {
       <PublicIntakeWizard
         onSubmitSuccess={handlePublicSubmission}
         onNavigateToAdmin={() => navigateTo('/admin')}
+        onNavigateToFAQ={() => navigateTo('/faq')}
       />
       <QRCodeModal
         isOpen={isQRModalOpen}

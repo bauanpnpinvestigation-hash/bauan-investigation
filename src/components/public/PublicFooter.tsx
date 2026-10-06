@@ -1,9 +1,41 @@
 import React from 'react';
-import { Shield, Phone, Mail, MapPin, Scale, HeartHandshake, ShieldCheck } from 'lucide-react';
+import { Shield, Phone, Mail, MapPin, Scale, HeartHandshake, ShieldCheck, ArrowRight, HelpCircle } from 'lucide-react';
 
-export const PublicFooter: React.FC = () => {
+interface PublicFooterProps {
+  onNavigateToFAQ?: () => void;
+}
+
+export const PublicFooter: React.FC<PublicFooterProps> = ({ onNavigateToFAQ }) => {
   return (
     <footer className="relative z-30 bg-slate-950 text-slate-300 border-t border-blue-900/60 font-sans mt-auto">
+      {/* Top Footer Ribbon: Official 15 Cases Philippine Law FAQ Guide */}
+      {onNavigateToFAQ && (
+        <div className="bg-slate-900/90 border-b border-blue-900/50">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400 tracking-wide">
+                <HelpCircle className="w-4 h-4 shrink-0" />
+                <span>MGA MADALAS ITANONG SA 15 KASO AYON SA BATAS NG PILIPINAS (FAQ)</span>
+              </div>
+              <h3 className="text-sm sm:text-base font-extrabold text-white leading-snug">
+                May tanong tungkol sa Estafa, Theft, Swindling, Robbery, Cyber Libel, Physical Injury, o Homicide?
+              </h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Basahin ang buong katotohanan, batayan sa batas, elemento ng kaso, at kailangang ebidensya sa wikang Tagalog.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onNavigateToFAQ}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-sm transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+            >
+              <span>Buksan ang FAQ sa mga Kaso</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Upper Footer: Professional, authoritative content */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-12 grid grid-cols-1 md:grid-cols-2 gap-8 text-sm leading-relaxed">
         
