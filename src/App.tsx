@@ -20,6 +20,7 @@ import {
   updateReportDataInFirestore,
   addAdminNoteInFirestore,
   eraseAllReportsFromFirestore,
+  normalizeFirestoreArray,
   AUTHORIZED_ADMIN_EMAIL
 } from './services/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -74,7 +75,15 @@ export default function App() {
       const resp = await fetchWithAuth('/api/admin/reports');
       if (resp.ok) {
         const data = await resp.json();
-        setReports(data.reports || []);
+        const rawReports = Array.isArray(data.reports) ? data.reports : [];
+        setReports(
+          rawReports.map((r: any) => ({
+            ...r,
+            attachments: normalizeFirestoreArray(r.attachments),
+            adminNotes: normalizeFirestoreArray(r.adminNotes),
+            auditLogs: normalizeFirestoreArray(r.auditLogs),
+          }))
+        );
       } else {
         console.warn('[Admin API] Failed to fetch reports list from intermediate security worker.');
       }

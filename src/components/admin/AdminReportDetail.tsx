@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ReportSubmission, ReportStatus } from '../../types/reports';
+import { ReportSubmission, ReportStatus, AttachmentItem, AdminNote, AuditLogEntry } from '../../types/reports';
 import { REPORT_TYPES } from '../../config/reportTypes';
 import { CopyButton } from '../common/CopyButton';
 import { CopySectionButton } from '../common/CopySectionButton';
@@ -11,7 +11,8 @@ import { formatHumanDate, formatHumanDateTime } from '../../utils/dateUtils';
 import { 
   getGoogleDriveAccessToken, 
   connectGoogleDriveAccount,
-  subscribeToGoogleDriveToken
+  subscribeToGoogleDriveToken,
+  normalizeFirestoreArray
 } from '../../services/firebase';
 import { 
   listGoogleDriveFiles, 
@@ -176,8 +177,11 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
   };
 
   const reportConfig = REPORT_TYPES[report.reportType];
-  const personalInfo = report.personalInformation;
+  const personalInfo = report.personalInformation || ({} as any);
   const reportData = report.reportData || {};
+  const safeAttachments = normalizeFirestoreArray(report.attachments);
+  const safeAdminNotes = normalizeFirestoreArray(report.adminNotes);
+  const safeAuditLogs = normalizeFirestoreArray(report.auditLogs);
 
   // Formatted plain texts for copy buttons
   const personalInfoFormatted = formatPersonalInformationText(personalInfo);
@@ -787,16 +791,16 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="px-5 py-3 bg-slate-50 border-b border-slate-200">
               <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
-                Attachments & Proof ({report.attachments.length})
+                Attachments & Proof ({safeAttachments.length})
               </h3>
             </div>
 
             <div className="p-4">
-              {report.attachments.length === 0 ? (
+              {safeAttachments.length === 0 ? (
                 <p className="text-xs text-slate-400 italic">No attachments submitted.</p>
               ) : (
                 <div className="space-y-3">
-                  {report.attachments.map((att) => (
+                  {safeAttachments.map((att) => (
                     <div
                       key={att.id}
                       className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between"
@@ -810,7 +814,7 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                           />
                         ) : (
                           <div className="w-10 h-10 rounded bg-white flex items-center justify-center text-slate-400 border border-slate-200 shrink-0">
-                            {att.type.includes('pdf') ? (
+                            {(att.type || '').includes('pdf') ? (
                               <File className="w-5 h-5 text-rose-600" />
                             ) : (
                               <ImageIcon className="w-5 h-5 text-blue-600" />
@@ -822,7 +826,7 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                             {att.name}
                           </p>
                           <p className="text-[10px] text-slate-400">
-                            {(att.size / 1024).toFixed(1)} KB
+                            {((att.size || 0) / 1024).toFixed(1)} KB
                           </p>
                         </div>
                       </div>
@@ -892,12 +896,12 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
               </form>
 
               <div className="space-y-2.5 pt-2">
-                {report.adminNotes.length === 0 ? (
+                {safeAdminNotes.length === 0 ? (
                   <p className="text-xs text-amber-900/60 italic">No internal notes added yet.</p>
                 ) : (
-                  report.adminNotes.map((note) => (
+                  safeAdminNotes.map((note, idx) => (
                     <div
-                      key={note.id}
+                      key={note.id || idx}
                       className="p-3 bg-white border border-amber-200 rounded-lg text-xs shadow-2xs space-y-1"
                     >
                       <div className="flex items-center justify-between text-[10px] text-slate-400">
@@ -918,20 +922,24 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="px-5 py-3 bg-slate-50 border-b border-slate-200">
               <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
-                Audit Trail ({report.auditLogs.length})
+                Audit Trail ({safeAuditLogs.length})
               </h3>
             </div>
 
             <div className="p-4 max-h-56 overflow-y-auto space-y-2 text-xs">
-              {report.auditLogs.map((log) => (
-                <div key={log.id} className="p-2 bg-slate-50 border border-slate-100 rounded text-[11px]">
-                  <div className="flex items-center justify-between text-slate-400 text-[10px]">
-                    <span className="font-semibold text-blue-900">{log.action}</span>
-                    <span>{formatHumanDateTime(log.timestamp)}</span>
+              {safeAuditLogs.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">No audit entries recorded.</p>
+              ) : (
+                safeAuditLogs.map((log, idx) => (
+                  <div key={log.id || idx} className="p-2 bg-slate-50 border border-slate-100 rounded text-[11px]">
+                    <div className="flex items-center justify-between text-slate-400 text-[10px]">
+                      <span className="font-semibold text-blue-900">{log.action}</span>
+                      <span>{formatHumanDateTime(log.timestamp)}</span>
+                    </div>
+                    <p className="text-slate-700 mt-1">{log.details}</p>
                   </div>
-                  <p className="text-slate-700 mt-1">{log.details}</p>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>

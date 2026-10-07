@@ -181,7 +181,30 @@ async function testConnection() {
 }
 testConnection();
 
+// Helper: Normalize array fields in case Firestore document contains serialized FieldValue or object map
+export function normalizeFirestoreArray<T = any>(val: T[] | any): T[] {
+  if (Array.isArray(val)) {
+    return val;
+  }
+  if (val && typeof val === 'object') {
+    if (Array.isArray(val._elements)) {
+      return val._elements as T[];
+    }
+    const values = Object.values(val).filter(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        ('id' in item || 'timestamp' in item || 'name' in item || 'text' in item)
+    );
+    if (values.length > 0) {
+      return values as T[];
+    }
+  }
+  return [];
+}
+
 // Helper: Sanitize payload to prevent Firestore "unsupported undefined value" errors
+// Preserves Firestore FieldValue instances (serverTimestamp, arrayUnion, etc.)
 export function sanitizeFirestorePayload<T>(obj: T): T {
   if (obj === undefined) {
     return null as unknown as T;
@@ -191,6 +214,14 @@ export function sanitizeFirestorePayload<T>(obj: T): T {
   }
   if (Array.isArray(obj)) {
     return obj.map(sanitizeFirestorePayload) as unknown as T;
+  }
+  // Preserve Firestore FieldValue / Timestamp / Date / custom class instances
+  if (
+    obj instanceof Date ||
+    typeof (obj as any)?._methodName === 'string' ||
+    ((obj as any).constructor && (obj as any).constructor !== Object)
+  ) {
+    return obj;
   }
   const clean: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {
@@ -379,9 +410,9 @@ export function subscribeToReports(
           archivedAt: data.archivedAt || null,
           personalInformation: data.personalInformation || {},
           reportData: data.reportData || {},
-          attachments: data.attachments || [],
-          adminNotes: data.adminNotes || [],
-          auditLogs: data.auditLogs || [],
+          attachments: normalizeFirestoreArray<AttachmentItem>(data.attachments),
+          adminNotes: normalizeFirestoreArray<AdminNote>(data.adminNotes),
+          auditLogs: normalizeFirestoreArray<AuditLogEntry>(data.auditLogs),
           stationOffice: data.stationOffice || 'Investigation & Records Section',
         });
       });
@@ -463,14 +494,12 @@ export async function updateReportDataInFirestore(
       details: `Investigation fields updated by ${adminEmail}`,
     };
 
-    const sanitizedData = sanitizeFirestorePayload({
-      reportData: updatedData,
+    await updateDoc(reportRef, {
+      reportData: sanitizeFirestorePayload(updatedData),
       updatedAt: now,
       serverUpdatedAt: serverTimestamp(),
       auditLogs: arrayUnion(logEntry),
     });
-
-    await updateDoc(reportRef, sanitizedData);
     console.log(`[Firestore] Investigation details updated for ${path}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
@@ -523,7 +552,7 @@ async function getReportAuditLogs(reportId: string): Promise<AuditLogEntry[]> {
   try {
     const reportRef = doc(db, 'reports', reportId);
     const snap = await getDoc(reportRef);
-    return snap.exists() ? snap.data().auditLogs || [] : [];
+    return snap.exists() ? normalizeFirestoreArray<AuditLogEntry>(snap.data().auditLogs) : [];
   } catch {
     return [];
   }
@@ -533,7 +562,7 @@ async function getReportAdminNotes(reportId: string): Promise<AdminNote[]> {
   try {
     const reportRef = doc(db, 'reports', reportId);
     const snap = await getDoc(reportRef);
-    return snap.exists() ? snap.data().adminNotes || [] : [];
+    return snap.exists() ? normalizeFirestoreArray<AdminNote>(snap.data().adminNotes) : [];
   } catch {
     return [];
   }
@@ -564,7 +593,7 @@ export async function deleteAttachmentInFirestore(reportId: string, attachmentId
     const snap = await getDoc(reportRef);
     if (!snap.exists()) return;
 
-    const currentAttachments: AttachmentItem[] = snap.data().attachments || [];
+    const currentAttachments: AttachmentItem[] = normalizeFirestoreArray<AttachmentItem>(snap.data().attachments);
     const updatedAttachments = currentAttachments.filter((att) => att.id !== attachmentId);
 
     const now = new Date().toISOString();
@@ -577,14 +606,12 @@ export async function deleteAttachmentInFirestore(reportId: string, attachmentId
       details: `Deleted attachment with ID ${attachmentId}`,
     };
 
-    const sanitizedData = sanitizeFirestorePayload({
-      attachments: updatedAttachments,
+    await updateDoc(reportRef, {
+      attachments: sanitizeFirestorePayload(updatedAttachments),
       updatedAt: now,
       serverUpdatedAt: serverTimestamp(),
       auditLogs: arrayUnion(logEntry),
     });
-
-    await updateDoc(reportRef, sanitizedData);
     console.log(`[Firestore] Deleted attachment ${attachmentId} from ${path}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);

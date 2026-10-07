@@ -79,13 +79,26 @@ async function deleteReport(id: string) {
 }
 
 // Unified secure helper to get reports list
+function ensureArray(val: any): any[] {
+  if (Array.isArray(val)) return val;
+  if (val && typeof val === 'object' && Array.isArray(val._elements)) return val._elements;
+  return [];
+}
+
 async function getReportsList() {
   if (firestoreDb) {
     try {
       const snapshot = await firestoreDb.collection('reports').get();
       const loaded: any[] = [];
       snapshot.forEach((doc: any) => {
-        loaded.push(doc.data());
+        const d = doc.data();
+        loaded.push({
+          ...d,
+          id: doc.id || d.id,
+          attachments: ensureArray(d.attachments),
+          adminNotes: ensureArray(d.adminNotes),
+          auditLogs: ensureArray(d.auditLogs),
+        });
       });
       return loaded.sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
