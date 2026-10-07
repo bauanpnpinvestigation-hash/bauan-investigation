@@ -14,6 +14,10 @@ import {
   subscribeToGoogleDriveToken,
   normalizeFirestoreArray
 } from '../../services/firebase';
+import {
+  downloadAttachmentFile,
+  buildClientCloudinaryFolder
+} from '../../services/cloudinary';
 import { 
   listGoogleDriveFiles, 
   uploadFileToGoogleDrive, 
@@ -44,7 +48,11 @@ import {
   UploadCloud,
   ExternalLink,
   Plus,
-  RefreshCw
+  RefreshCw,
+  Download,
+  FolderCheck,
+  Camera,
+  ZoomIn
 } from 'lucide-react';
 
 interface AdminReportDetailProps {
@@ -89,6 +97,7 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
   const [isUploadingDrive, setIsUploadingDrive] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<DriveRecordFile | null>(null);
   const [isDeletingDriveFile, setIsDeletingDriveFile] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<AttachmentItem | null>(null);
 
   const loadCaseDriveFiles = async () => {
     const token = getGoogleDriveAccessToken();
@@ -561,6 +570,169 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
             )}
           </div>
 
+          {/* CLIENT VALID ID / CAPTURED PHOTO GALLERY (WITH DEDICATED CLOUDINARY FOLDER & DOWNLOAD) */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="px-5 py-3.5 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Camera className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div>
+                  <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider">
+                    Client Valid ID & Captured Photos ({safeAttachments.length})
+                  </h3>
+                  <p className="text-[11px] text-slate-300">
+                    Isolated per client in Cloudinary • View & Download Official Client Photo
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700 text-[10px] font-mono text-emerald-300 truncate max-w-full">
+                <FolderCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="truncate">
+                  {safeAttachments[0]?.cloudinaryFolder ||
+                    buildClientCloudinaryFolder(
+                      report.reportType,
+                      report.referenceNumber,
+                      [personalInfo.lastName, personalInfo.firstName, personalInfo.middleName]
+                        .filter(Boolean)
+                        .join('_')
+                    )}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-5">
+              {safeAttachments.length === 0 ? (
+                <div className="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  <ImageIcon className="w-7 h-7 text-slate-400 mx-auto mb-1.5" />
+                  <p className="text-xs font-semibold text-slate-600">
+                    No Valid ID or Live Photo attached by this client.
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Client Dedicated Cloudinary Folder:{' '}
+                    <span className="font-mono">
+                      {buildClientCloudinaryFolder(
+                        report.reportType,
+                        report.referenceNumber,
+                        [personalInfo.lastName, personalInfo.firstName, personalInfo.middleName]
+                          .filter(Boolean)
+                          .join('_')
+                      )}
+                    </span>
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {safeAttachments.map((att) => {
+                    const photoSrc = att.url || att.previewUrl || '';
+                    const isPdf = (att.type || '').toLowerCase().includes('pdf');
+                    const downloadFileName = `${report.referenceNumber}_${
+                      (personalInfo.lastName || 'Client').replace(/[^a-zA-Z0-9_-]/g, '_')
+                    }_${att.name || 'Photo.jpg'}`;
+                    const itemFolder =
+                      att.cloudinaryFolder ||
+                      buildClientCloudinaryFolder(
+                        report.reportType,
+                        report.referenceNumber,
+                        [personalInfo.lastName, personalInfo.firstName, personalInfo.middleName]
+                          .filter(Boolean)
+                          .join('_')
+                      );
+
+                    return (
+                      <div
+                        key={att.id}
+                        className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50 flex flex-col justify-between shadow-2xs"
+                      >
+                        <div>
+                          {/* Large Visual Photo Preview */}
+                          {photoSrc && !isPdf ? (
+                            <div
+                              onClick={() => setPreviewAttachment(att)}
+                              className="relative group cursor-pointer bg-slate-900 aspect-video w-full overflow-hidden flex items-center justify-center"
+                            >
+                              <img
+                                src={photoSrc}
+                                alt={att.name}
+                                className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200"
+                              />
+                              <div className="absolute inset-0 bg-slate-950/0 group-hover:bg-slate-950/40 transition-colors flex items-center justify-center">
+                                <span className="opacity-0 group-hover:opacity-100 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/95 text-slate-900 rounded-lg text-xs font-extrabold shadow-md transition-opacity">
+                                  <ZoomIn className="w-3.5 h-3.5 text-blue-700" />
+                                  <span>View Full Size</span>
+                                </span>
+                              </div>
+                              <span
+                                className={`absolute top-2.5 left-2.5 px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs ${
+                                  att.sourceType === 'live_capture'
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'bg-blue-800 text-white'
+                                }`}
+                              >
+                                {att.sourceType === 'live_capture' ? 'LIVE CAPTURE' : 'UPLOADED ID / PHOTO'}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="aspect-video w-full bg-slate-100 flex flex-col items-center justify-center text-slate-500 p-4">
+                              <File className="w-10 h-10 text-rose-600 mb-1" />
+                              <span className="text-xs font-bold text-slate-700">{att.name}</span>
+                            </div>
+                          )}
+
+                          {/* Metadata & Folder Info */}
+                          <div className="p-3.5 space-y-1">
+                            <p className="text-xs font-extrabold text-slate-900 truncate" title={att.name}>
+                              {att.name}
+                            </p>
+                            <p className="text-[10px] font-mono text-slate-500 truncate" title={itemFolder}>
+                              Folder: {itemFolder}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons: View & Download */}
+                        <div className="px-3.5 py-2.5 bg-white border-t border-slate-200 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {photoSrc && !isPdf && (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewAttachment(att)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              >
+                                <ZoomIn className="w-3.5 h-3.5 text-blue-700" />
+                                <span>View Photo</span>
+                              </button>
+                            )}
+                            {photoSrc && (
+                              <button
+                                type="button"
+                                onClick={() => downloadAttachmentFile(photoSrc, downloadFileName)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-900 hover:bg-blue-950 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                                title="Download Client Photo to Device"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Download Photo</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {onDeleteAttachment && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteAttachment(report.id, att.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Delete attachment"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* OFFICIAL INVESTIGATION DETAILS & REPORT SECTIONS ("The Rest Will Be Ours") */}
           <div className="space-y-4">
             <div className="bg-slate-800 text-white px-5 py-3 rounded-xl flex items-center justify-between shadow-xs">
@@ -904,15 +1076,32 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        {att.previewUrl && (
-                          <a
-                            href={att.previewUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-white border border-slate-200 px-2 py-1 rounded"
-                          >
-                            View
-                          </a>
+                        {(att.url || att.previewUrl) && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewAttachment(att)}
+                              className="text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-white border border-slate-200 px-2 py-1 rounded cursor-pointer"
+                            >
+                              View
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                downloadAttachmentFile(
+                                  att.url || att.previewUrl || '',
+                                  `${report.referenceNumber}_${
+                                    (personalInfo.lastName || 'Client').replace(/[^a-zA-Z0-9_-]/g, '_')
+                                  }_${att.name || 'Photo.jpg'}`
+                                )
+                              }
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-white bg-blue-900 hover:bg-blue-950 px-2.5 py-1 rounded cursor-pointer"
+                              title="Download Photo"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>Download</span>
+                            </button>
+                          </>
                         )}
                         {onDeleteAttachment && (
                           <button
@@ -1271,6 +1460,71 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
               >
                 {isDeletingDriveFile ? 'Deleting...' : 'Delete File'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full-Screen Client Photo Lightbox Modal */}
+      {previewAttachment && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-xs animate-fadeIn"
+          onClick={() => setPreviewAttachment(null)}
+        >
+          <div
+            className="relative bg-slate-900 rounded-2xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl border border-slate-700 space-y-4 text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="min-w-0">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 block truncate">
+                  {previewAttachment.cloudinaryFolder ||
+                    buildClientCloudinaryFolder(
+                      report.reportType,
+                      report.referenceNumber,
+                      [personalInfo.lastName, personalInfo.firstName, personalInfo.middleName]
+                        .filter(Boolean)
+                        .join('_')
+                    )}
+                </span>
+                <h3 className="text-sm sm:text-base font-extrabold truncate">
+                  {previewAttachment.name} — {personalInfo.lastName}, {personalInfo.firstName} (#{report.referenceNumber})
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadAttachmentFile(
+                      previewAttachment.url || previewAttachment.previewUrl || '',
+                      `${report.referenceNumber}_${
+                        (personalInfo.lastName || 'Client').replace(/[^a-zA-Z0-9_-]/g, '_')
+                      }_${previewAttachment.name || 'Photo.jpg'}`
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold shadow-md cursor-pointer transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewAttachment(null)}
+                  className="p-2 bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white rounded-xl cursor-pointer transition-colors"
+                  title="Close preview"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-black rounded-xl overflow-hidden max-h-[75vh] flex items-center justify-center p-2">
+              <img
+                src={previewAttachment.url || previewAttachment.previewUrl}
+                alt={previewAttachment.name}
+                className="max-h-[70vh] w-auto object-contain rounded"
+              />
             </div>
           </div>
         </div>

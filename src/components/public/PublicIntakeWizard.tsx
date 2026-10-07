@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { 
   PersonalInformation, 
-  ReportSubmission 
+  ReportSubmission,
+  AttachmentItem
 } from '../../types/reports';
 import { PersonalInformationForm } from '../form/PersonalInformationForm';
+import { FileUploadDropzone } from '../form/FileUploadDropzone';
 import { CopyButton } from '../common/CopyButton';
 import { BrandLogo } from '../common/BrandLogo';
 import { BackgroundWatermark } from '../common/BackgroundWatermark';
@@ -26,7 +28,8 @@ import {
   X,
   HelpCircle,
   FileText,
-  ArrowLeft
+  ArrowLeft,
+  Camera
 } from 'lucide-react';
 
 interface PublicIntakeWizardProps {
@@ -80,6 +83,8 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [personalInfo, setPersonalInfo] = useState<PersonalInformation>(INITIAL_PERSONAL_INFO);
   const [vehicularFields, setVehicularFields] = useState<VehicularAccidentFields>(INITIAL_VEHICULAR_FIELDS);
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [clientReferenceNumber, setClientReferenceNumber] = useState<string>(() => generateReferenceNumber());
   
   // Validation errors
   const [personalErrors, setPersonalErrors] = useState<Partial<Record<keyof PersonalInformation, string>>>({});
@@ -178,7 +183,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
     if (isSubmitting) return;
     setIsSubmitting(true);
 
-    const refNo = generateReferenceNumber();
+    const refNo = clientReferenceNumber || generateReferenceNumber();
     const isVehicular = wizardMode === 'vehicular-incident';
 
     const newSubmission: ReportSubmission = {
@@ -198,7 +203,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
             plateNumber: vehicularFields.plateNumber.trim(),
           }
         : {},
-      attachments: [],
+      attachments: [...attachments],
       adminNotes: [],
       auditLogs: [
         {
@@ -208,8 +213,8 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
           adminEmail: 'public.intake.portal@system',
           action: 'VIEW_REPORT',
           details: isVehicular
-            ? `Client submitted Vehicular Accident intake via Public Portal: ${refNo}`
-            : `Client submitted full Personal Information intake via QR: ${refNo}`,
+            ? `Client submitted Vehicular Accident intake via Public Portal (${attachments.length} photo/ID attached): ${refNo}`
+            : `Client submitted full Personal Information intake via QR (${attachments.length} photo/ID attached): ${refNo}`,
         },
       ],
       stationOffice: isVehicular ? 'Traffic Enforcement Unit' : 'Investigation & Records Section',
@@ -235,12 +240,22 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
     setCurrentStep(1);
     setPersonalInfo(INITIAL_PERSONAL_INFO);
     setVehicularFields(INITIAL_VEHICULAR_FIELDS);
+    setAttachments([]);
+    setClientReferenceNumber(generateReferenceNumber());
     setSubmissionResult(null);
     setPersonalErrors({});
     setVehicularErrors({});
     setHasConsented(false);
     setConsentError(false);
   };
+
+  const clientFullNameSlug = [
+    personalInfo.lastName.trim(),
+    personalInfo.firstName.trim(),
+    personalInfo.middleName.trim(),
+  ]
+    .filter(Boolean)
+    .join('_');
 
   const formattedVehicularSentence = formatVehicularAccidentText(personalInfo, {
     vehicleMake: vehicularFields.vehicleMake,
@@ -487,6 +502,32 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                   />
                 </div>
 
+                {/* Optional Valid ID / Live Capture Upload Section */}
+                <div className="bg-white/80 rounded-xl p-5 sm:p-7 border border-slate-200/80 shadow-xs space-y-4">
+                  <div className="border-b border-slate-200 pb-3 flex items-center justify-between gap-2">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1.5 mb-0.5">
+                        <Camera className="w-4 h-4 text-emerald-700" />
+                        <span>Optional Valid ID / Photo Capture</span>
+                      </span>
+                      <h3 className="text-base sm:text-lg font-black text-slate-900">
+                        Valid ID or Live Photo (Opsyonal na ID o Live Capture)
+                      </h3>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-600 shrink-0">
+                      Optional (Opsyonal)
+                    </span>
+                  </div>
+
+                  <FileUploadDropzone
+                    attachments={attachments}
+                    onChange={setAttachments}
+                    reportType="personal-intake"
+                    referenceNumber={clientReferenceNumber}
+                    clientName={clientFullNameSlug}
+                  />
+                </div>
+
                 {/* Bottom Proceed Action */}
                 <div className="pt-2 flex justify-end">
                   <button
@@ -718,6 +759,32 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                   />
                 </div>
 
+                {/* Part 3 (Optional): Valid ID / Driver License / Live Capture Photo */}
+                <div className="bg-white/80 rounded-xl p-5 sm:p-7 border border-slate-200/80 shadow-xs space-y-4">
+                  <div className="border-b border-slate-200 pb-3 flex items-center justify-between gap-2">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1.5 mb-0.5">
+                        <Camera className="w-4 h-4 text-emerald-700" />
+                        <span>Optional Driver's License / Valid ID / Vehicle Photo</span>
+                      </span>
+                      <h3 className="text-base sm:text-lg font-black text-slate-900">
+                        Valid ID, License or Live Photo (Opsyonal na ID o Live Capture)
+                      </h3>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-600 shrink-0">
+                      Optional (Opsyonal)
+                    </span>
+                  </div>
+
+                  <FileUploadDropzone
+                    attachments={attachments}
+                    onChange={setAttachments}
+                    reportType="vehicular-incident"
+                    referenceNumber={clientReferenceNumber}
+                    clientName={clientFullNameSlug}
+                  />
+                </div>
+
                 {/* Live Official Vehicular Accident Format Preview */}
                 <div className="bg-amber-50/90 rounded-xl p-4 sm:p-5 border border-amber-300 shadow-xs space-y-2">
                   <div className="flex items-center justify-between gap-2">
@@ -910,6 +977,64 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                       <dd className="font-semibold font-mono text-slate-900 mt-0.5">{personalInfo.contactNumber || '—'}</dd>
                     </div>
                   </dl>
+                </div>
+
+                {/* Review Attached / Captured Photos (if any) */}
+                <div className="bg-white/75 rounded-xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                    <h4 className="font-extrabold text-sm sm:text-base text-slate-900 flex items-center gap-2">
+                      <Camera className="w-4 h-4 text-blue-800" />
+                      <span>VALID ID / CAPTURED PHOTOS ({attachments.length})</span>
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={handleBackToEdit}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-blue-900 hover:text-blue-950 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>[ADD / EDIT PHOTO]</span>
+                    </button>
+                  </div>
+
+                  {attachments.length === 0 ? (
+                    <p className="text-xs text-slate-500 italic">
+                      No ID or photo attached (Optional — Maaaring magpatuloy kahit walang ID photo o pindutin ang [ADD / EDIT PHOTO] kung nais mag-capture/upload).
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {attachments.map((att) => (
+                        <div
+                          key={att.id}
+                          className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl"
+                        >
+                          {(att.previewUrl || att.url) && (
+                            <img
+                              src={att.previewUrl || att.url}
+                              alt={att.name}
+                              className="w-16 h-16 object-cover rounded-lg border border-slate-300 shrink-0 bg-white"
+                            />
+                          )}
+                          <div className="overflow-hidden space-y-0.5">
+                            <span
+                              className={`inline-block text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
+                                att.sourceType === 'live_capture'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-blue-100 text-blue-800'
+                              }`}
+                            >
+                              {att.sourceType === 'live_capture' ? 'LIVE CAPTURE' : 'UPLOADED PHOTO'}
+                            </span>
+                            <p className="text-xs font-bold text-slate-900 truncate">{att.name}</p>
+                            {att.cloudinaryFolder && (
+                              <p className="text-[10px] font-mono text-slate-500 truncate">
+                                Folder: {att.cloudinaryFolder}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Data Privacy & Records Safekeeping Consent Checkbox */}

@@ -89,6 +89,9 @@ export interface AttachmentItem {
   type: string;
   url?: string;
   previewUrl?: string;
+  cloudinaryFolder?: string;
+  publicId?: string;
+  sourceType?: 'upload' | 'live_capture';
   uploadedAt: string;
 }
 

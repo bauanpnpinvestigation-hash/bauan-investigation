@@ -206,7 +206,14 @@ function generateSecureReferenceNumber(): string {
 // Intake public submission
 app.post('/api/intake', rateLimiter(30, 60000), async (req, res) => {
   try {
-    const { reportType, personalInformation, reportData, attachments } = req.body || {};
+    const {
+      id: clientReportId,
+      referenceNumber: clientReferenceNumber,
+      reportType,
+      personalInformation,
+      reportData,
+      attachments,
+    } = req.body || {};
 
     const safeInfo = personalInformation && typeof personalInformation === 'object' ? personalInformation : {};
     const safeReportData = reportData && typeof reportData === 'object' ? reportData : {};
@@ -223,14 +230,25 @@ app.post('/api/intake', rateLimiter(30, 60000), async (req, res) => {
     const validatedAttachments = safeAttachments.map((att: any) => ({
       id: String(att.id || `file_${Date.now()}_${Math.random()}`),
       name: String(att.name || 'attachment').substring(0, 255),
-      url: String(att.url || ''),
-      bytes: Number(att.bytes || 0),
-      format: String(att.format || 'bin').substring(0, 10),
+      size: Number(att.size || att.bytes || 0),
+      type: String(att.type || att.format || 'image/jpeg').substring(0, 60),
+      url: String(att.url || att.previewUrl || ''),
+      previewUrl: String(att.previewUrl || att.url || ''),
+      cloudinaryFolder: String(att.cloudinaryFolder || '').substring(0, 255),
+      publicId: String(att.publicId || '').substring(0, 255),
+      sourceType: att.sourceType === 'live_capture' ? 'live_capture' : 'upload',
+      uploadedAt: String(att.uploadedAt || new Date().toISOString()),
     }));
 
-    // Server-side generation of tracking information
-    const reportId = `rep_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    const referenceNumber = generateSecureReferenceNumber();
+    // Server-side generation or preservation of tracking information
+    const reportId =
+      clientReportId && typeof clientReportId === 'string'
+        ? clientReportId.substring(0, 120)
+        : `rep_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const referenceNumber =
+      clientReferenceNumber && typeof clientReferenceNumber === 'string'
+        ? clientReferenceNumber.substring(0, 60)
+        : generateSecureReferenceNumber();
     const serverTimestampString = new Date().toISOString();
 
     const secureReport = {
@@ -289,18 +307,27 @@ app.post('/api/intake', rateLimiter(30, 60000), async (req, res) => {
   }
 });
 
-// Signed Cloudinary upload starter
-app.post('/api/upload/start', rateLimiter(15, 60000), (req, res) => {
+// Signed Cloudinary upload starter with dedicated per-client folder
+app.post('/api/upload/start', rateLimiter(25, 60000), (req, res) => {
   try {
-    const { filename, filetype, referenceNumber } = req.body;
+    const { filename, filetype, referenceNumber, reportType, clientName } = req.body;
     if (!filename || typeof filename !== 'string') {
       return res.status(400).json({ error: 'Invalid file name.' });
     }
 
     const timestamp = Math.round(Date.now() / 1000);
     const cleanBaseName = filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanReportType = String(reportType || 'personal-intake').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanRef = String(referenceNumber || `CLIENT_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanClientName = String(clientName || '')
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+
+    const clientFolderName = cleanClientName ? `${cleanRef}_${cleanClientName}` : cleanRef;
+    const folder = `bauan_mps_clients/${cleanReportType}/${clientFolderName}`;
     const publicId = `${cleanBaseName}_${Date.now()}`;
-    const folder = `incident_reports/personal-intake/${referenceNumber || 'draft'}`;
 
     let signature = '';
     if (CLOUDINARY_API_SECRET) {

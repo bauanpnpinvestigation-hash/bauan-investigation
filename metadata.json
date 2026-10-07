@@ -1,6 +1,6 @@
 {
   "name": "Bauan MPS Investigation Section",
   "description": "Authorized public intake portal and administrator investigation dashboard for secure incident reports, complaints, and official police requests at Bauan MPS.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

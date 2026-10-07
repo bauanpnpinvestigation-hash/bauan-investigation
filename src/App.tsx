@@ -50,6 +50,26 @@ export default function App() {
   // Toast notification manager
   const toast = useToast();
 
+  // Helper to guarantee unique report keys and prevent duplicate submissions in UI state
+  const deduplicateReports = (list: ReportSubmission[]): ReportSubmission[] => {
+    const seenIds = new Set<string>();
+    const seenRefs = new Set<string>();
+    const unique: ReportSubmission[] = [];
+
+    for (const item of list) {
+      if (!item || !item.id) continue;
+      if (seenIds.has(item.id)) continue;
+      if (item.referenceNumber && seenRefs.has(item.referenceNumber)) continue;
+
+      seenIds.add(item.id);
+      if (item.referenceNumber) {
+        seenRefs.add(item.referenceNumber);
+      }
+      unique.push(item);
+    }
+    return unique;
+  };
+
   // Helper utility to make authenticated requests to our secure backend endpoints
   const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
     const user = auth.currentUser;
@@ -77,12 +97,14 @@ export default function App() {
         const data = await resp.json();
         const rawReports = Array.isArray(data.reports) ? data.reports : [];
         setReports(
-          rawReports.map((r: any) => ({
-            ...r,
-            attachments: normalizeFirestoreArray(r.attachments),
-            adminNotes: normalizeFirestoreArray(r.adminNotes),
-            auditLogs: normalizeFirestoreArray(r.auditLogs),
-          }))
+          deduplicateReports(
+            rawReports.map((r: any) => ({
+              ...r,
+              attachments: normalizeFirestoreArray(r.attachments),
+              adminNotes: normalizeFirestoreArray(r.adminNotes),
+              auditLogs: normalizeFirestoreArray(r.auditLogs),
+            }))
+          )
         );
       } else {
         console.warn('[Admin API] Failed to fetch reports list from intermediate security worker.');
@@ -106,7 +128,7 @@ export default function App() {
     if (currentUser) {
       const unsubscribe = subscribeToReports(
         (liveReports) => {
-          setReports(liveReports);
+          setReports(deduplicateReports(liveReports));
         },
         (err) => {
           console.warn('[Direct Firestore Sync failed, falling back to secure API]:', err);
@@ -214,28 +236,32 @@ export default function App() {
   const handlePublicSubmission = async (newReport: ReportSubmission) => {
     try {
       // 1. Write directly to Cloud Firestore (Guaranteed to work on all phones & devices)
-      await createReportInFirestore(newReport);
-
-      // 2. Optional backend API sync
       try {
-        await fetch('/api/intake', {
+        await createReportInFirestore(newReport);
+      } catch (firestoreErr) {
+        // 2. Fallback to backend API ONLY if direct Firestore write fails
+        console.warn('[Public Submission] Direct Firestore write failed, using API fallback:', firestoreErr);
+        const resp = await fetch('/api/intake', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            id: newReport.id,
+            referenceNumber: newReport.referenceNumber,
             reportType: newReport.reportType,
             personalInformation: newReport.personalInformation,
             reportData: newReport.reportData,
             attachments: newReport.attachments,
           }),
         });
-      } catch (apiErr) {
-        console.warn('[Public API] Optional server sync notice:', apiErr);
+        if (!resp.ok) {
+          throw firestoreErr;
+        }
       }
 
-      toast.success(`Personal Information submitted! Ref #${newReport.referenceNumber}`, 'Submission Confirmed');
-      setReports((prev) => [newReport, ...prev]);
+      toast.success(`Information submitted! Ref #${newReport.referenceNumber}`, 'Submission Confirmed');
+      setReports((prev) => deduplicateReports([newReport, ...prev]));
     } catch (err: any) {
       console.error('[Public Submission] Record creation error:', err);
       toast.error(err.message || 'Error recording submission. Please check your connection.');
