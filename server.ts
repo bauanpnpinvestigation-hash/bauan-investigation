@@ -206,9 +206,10 @@ function generateSecureReferenceNumber(): string {
 // Intake public submission
 app.post('/api/intake', rateLimiter(30, 60000), async (req, res) => {
   try {
-    const { reportType, personalInformation, attachments } = req.body || {};
+    const { reportType, personalInformation, reportData, attachments } = req.body || {};
 
     const safeInfo = personalInformation && typeof personalInformation === 'object' ? personalInformation : {};
+    const safeReportData = reportData && typeof reportData === 'object' ? reportData : {};
     const firstName = String(safeInfo.firstName || 'Anonymous').trim().substring(0, 150);
     const lastName = String(safeInfo.lastName || 'Citizen').trim().substring(0, 150);
     const birthday = String(safeInfo.birthday || new Date().toISOString().split('T')[0]);
@@ -253,7 +254,7 @@ app.post('/api/intake', rateLimiter(30, 60000), async (req, res) => {
         address,
         contactNumber,
       },
-      reportData: {},
+      reportData: safeReportData,
       attachments: validatedAttachments,
       adminNotes: [],
       auditLogs: [

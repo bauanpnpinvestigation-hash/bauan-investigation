@@ -226,6 +226,7 @@ export default function App() {
           body: JSON.stringify({
             reportType: newReport.reportType,
             personalInformation: newReport.personalInformation,
+            reportData: newReport.reportData,
             attachments: newReport.attachments,
           }),
         });

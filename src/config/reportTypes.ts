@@ -1,5 +1,5 @@
 import { ReportTypeDefinition, PersonalInformation } from '../types/reports';
-import { formatPersonalInformationText, formatSectionText } from '../utils/formatters';
+import { formatPersonalInformationText, formatVehicularAccidentText, formatSectionText } from '../utils/formatters';
 import { formatHumanDate } from '../utils/dateUtils';
 
 export const REPORT_TYPES: Record<string, ReportTypeDefinition> = {
@@ -105,8 +105,8 @@ export const REPORT_TYPES: Record<string, ReportTypeDefinition> = {
   },
   'vehicular-incident': {
     id: 'vehicular-incident',
-    nameEn: 'Vehicular Incident',
-    nameFil: 'Insidente sa Sasakyan',
+    nameEn: 'Vehicular Accident',
+    nameFil: 'Aksidente / Insidente sa Sasakyan',
     descriptionEn: 'Traffic collision, property damage, vehicular physical injury, or hit and run.',
     descriptionFil: 'Banggaan ng sasakyan, pinsala sa ari-arian, pinsala sa katawan, o hit and run.',
     iconName: 'Car',
@@ -115,75 +115,85 @@ export const REPORT_TYPES: Record<string, ReportTypeDefinition> = {
         id: 'vehicle-info',
         titleEn: 'Vehicle Information',
         titleFil: 'Impormasyon ng Sasakyan',
-        description: 'Details of the reporting party\'s vehicle.',
+        description: 'Details of the vehicle involved in the vehicular accident.',
         fields: [
           {
-            id: 'plateNumber',
-            labelEn: 'Plate Number',
-            labelFil: 'Numero ng Plaka',
-            type: 'text',
-            required: true,
-            placeholder: 'e.g. ABC 1234 or MV File No.',
-          },
-          {
-            id: 'vehicleType',
-            labelEn: 'Vehicle Type',
-            labelFil: 'Uri ng Sasakyan',
-            type: 'select',
-            required: true,
-            options: [
-              { label: 'Motorcycle (Motorsiklo)', value: 'Motorcycle' },
-              { label: 'Sedan / Hatchback (Kotse)', value: 'Sedan' },
-              { label: 'SUV / AUV', value: 'SUV' },
-              { label: 'Van / Minivan', value: 'Van' },
-              { label: 'Pickup Truck', value: 'Pickup Truck' },
-              { label: 'Truck / Heavy Vehicle (Trak)', value: 'Truck' },
-              { label: 'Bus', value: 'Bus' },
-              { label: 'Tricycle / E-Bike (Traysikel / E-Bike)', value: 'Tricycle' },
-              { label: 'Bicycle (Bisikleta)', value: 'Bicycle' },
-              { label: 'Other (Iba Pa)', value: 'Other' },
-            ],
-          },
-          {
             id: 'vehicleMake',
-            labelEn: 'Vehicle Make',
-            labelFil: 'Gumawa ng Sasakyan',
+            labelEn: 'Vehicle Make / Brand',
+            labelFil: 'Tatak / Brand ng Sasakyan',
             type: 'text',
             required: true,
-            placeholder: 'e.g. Toyota, Honda, Yamaha, Isuzu',
-            suggestions: ['Toyota', 'Honda', 'Yamaha', 'Suzuki', 'Mitsubishi', 'Nissan', 'Ford', 'Hyundai', 'Isuzu', 'Kawasaki'],
+            placeholder: 'e.g. Mitsubishi, Toyota, Honda, Yamaha',
+            suggestions: [
+              'Mitsubishi',
+              'Toyota',
+              'Honda',
+              'Yamaha',
+              'Suzuki',
+              'Isuzu',
+              'Ford',
+              'Nissan',
+              'Hyundai',
+              'Kia',
+              'Geely',
+              'MG',
+              'Kawasaki',
+              'RUSI',
+            ],
           },
           {
             id: 'vehicleModel',
             labelEn: 'Vehicle Model',
-            labelFil: 'Modelo',
-            type: 'text',
-            required: false,
-            placeholder: 'e.g. Vios, Click 125i, Mirage, Fortuner',
-          },
-          {
-            id: 'vehicleColor',
-            labelEn: 'Vehicle Color',
-            labelFil: 'Kulay',
+            labelFil: 'Modelo ng Sasakyan',
             type: 'text',
             required: true,
-            placeholder: 'e.g. White, Pearl Red, Matte Black',
+            placeholder: 'e.g. Expander, Vios, Montero Sport, Click 125i',
+            suggestions: [
+              'Expander',
+              'Montero Sport',
+              'Mirage G4',
+              'L300',
+              'Strada / Triton',
+              'Vios',
+              'Innova',
+              'Fortuner',
+              'Hilux',
+              'Wigo',
+              'Raize',
+              'Click 125i',
+              'PCX 160',
+              'ADV 160',
+              'NMAX',
+              'Aerox 155',
+              'Sniper 155',
+              'Ertiga',
+              'D-Max',
+              'Ranger',
+            ],
           },
           {
             id: 'vehicleYear',
-            labelEn: 'Vehicle Year',
-            labelFil: 'Taon',
+            labelEn: 'Vehicle Year Model',
+            labelFil: 'Taon ng Modelo (Year)',
             type: 'text',
-            required: false,
-            placeholder: 'e.g. 2022',
+            required: true,
+            placeholder: 'e.g. 2026',
           },
           {
-            id: 'registrationInfo',
-            labelEn: 'Registration Information',
-            labelFil: 'Impormasyon sa Rehistro',
+            id: 'vehicleColor',
+            labelEn: 'Vehicle Color (colored ...)',
+            labelFil: 'Kulay ng Sasakyan',
             type: 'text',
-            required: false,
-            placeholder: 'e.g. Registered Owner Name / OR-CR Number',
+            required: true,
+            placeholder: 'e.g. graphite gray metallic, pearl white, black',
+          },
+          {
+            id: 'plateNumber',
+            labelEn: 'Plate Number (bearing plate number ...)',
+            labelFil: 'Numero ng Plaka / MV File No.',
+            type: 'text',
+            required: true,
+            placeholder: 'e.g. DCH 2797',
           },
         ],
       },
@@ -370,49 +380,13 @@ export const REPORT_TYPES: Record<string, ReportTypeDefinition> = {
     generateTemplate: (personalInfo, reportData, referenceNumber) => {
       const parts: string[] = [];
 
-      parts.push('==================================================');
-      parts.push('PHILIPPINE NATIONAL POLICE / INVESTIGATION BUREAU');
-      parts.push('OFFICIAL VEHICULAR INCIDENT REPORT');
-      if (referenceNumber) parts.push(`REFERENCE NO: ${referenceNumber}`);
-      parts.push('==================================================\n');
-
-      // 1. Personal Information
-      const piText = formatPersonalInformationText(personalInfo);
-      if (piText) {
-        parts.push('PERSONAL INFORMATION');
-        parts.push(piText);
+      const vehicularBlotterParagraph = formatVehicularAccidentText(personalInfo, reportData);
+      if (vehicularBlotterParagraph) {
+        parts.push(vehicularBlotterParagraph);
         parts.push('');
       }
 
-      // 2. Vehicle Information
-      const vehicleFields = [
-        { label: 'Plate Number', value: reportData.plateNumber },
-        { label: 'Vehicle Type', value: reportData.vehicleType },
-        { label: 'Vehicle Make', value: reportData.vehicleMake },
-        { label: 'Vehicle Model', value: reportData.vehicleModel },
-        { label: 'Vehicle Color', value: reportData.vehicleColor },
-        { label: 'Vehicle Year', value: reportData.vehicleYear },
-        { label: 'Registration Information', value: reportData.registrationInfo },
-      ];
-      const vehicleText = formatSectionText('VEHICLE INFORMATION', vehicleFields);
-      if (vehicleText) {
-        parts.push(vehicleText);
-        parts.push('');
-      }
-
-      // 3. Driver Information
-      const driverFields = [
-        { label: 'Driver Name', value: reportData.driverName },
-        { label: 'Driver License Number', value: reportData.driverLicenseNumber },
-        { label: 'Driver Contact Number', value: reportData.driverContactNumber },
-      ];
-      const driverText = formatSectionText('DRIVER INFORMATION', driverFields);
-      if (driverText) {
-        parts.push(driverText);
-        parts.push('');
-      }
-
-      // 4. Incident Information
+      // Optional officer investigation fields if filled in
       const incidentFields = [
         { label: 'Date', value: formatHumanDate(reportData.incidentDate) },
         { label: 'Time', value: reportData.incidentTime },
@@ -425,14 +399,12 @@ export const REPORT_TYPES: Record<string, ReportTypeDefinition> = {
         parts.push('');
       }
 
-      // 5. Narrative
       if (reportData.narrative?.trim()) {
         parts.push('NARRATIVE');
         parts.push(reportData.narrative.trim());
         parts.push('');
       }
 
-      // 6. Other Party
       const otherPartyFields = [
         { label: 'Other Party Name', value: reportData.otherPartyName },
         { label: 'Other Party Contact', value: reportData.otherPartyContact },
@@ -446,7 +418,6 @@ export const REPORT_TYPES: Record<string, ReportTypeDefinition> = {
         parts.push('');
       }
 
-      // 7. Witness Information
       const witnessFields = [
         { label: 'Witness Name', value: reportData.witnessName },
         { label: 'Witness Contact', value: reportData.witnessContact },

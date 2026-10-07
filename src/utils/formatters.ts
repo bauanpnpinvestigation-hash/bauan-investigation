@@ -64,6 +64,114 @@ export function formatPersonalInformationText(info: PersonalInformation): string
 }
 
 /**
+ * Formats Vehicular Accident + Driver Personal Information into the official PNP blotter paragraph:
+ * Example:
+ * "Mitsubihi Expander 2026, colored graphite gray metallic, bearing plate number DCH 2797 and driven by Saturday Kenneth Aguila Legaspi, 38 years old, (DOB: August 22, 1987) male, married, marketing consultant and resident of Brgy. Manghinao 1, Bauan, Batangas. 09922381037"
+ */
+export function formatVehicularAccidentText(
+  info: PersonalInformation,
+  reportData: Record<string, any> = {}
+): string {
+  // 1. Vehicle Make + Model + Year
+  const rawMake = (reportData.vehicleMake || '').trim();
+  const rawModel = (reportData.vehicleModel || '').trim();
+  const rawYear = String(reportData.vehicleYear || '').trim();
+  const rawMakeModel = (reportData.vehicleMakeModel || '').trim();
+  const rawMakeModelYear = (reportData.vehicleMakeModelYear || '').trim();
+
+  let baseVehicle =
+    [rawMake, rawModel].filter(Boolean).join(' ').trim() ||
+    rawMakeModel ||
+    rawMakeModelYear;
+  if (rawYear && baseVehicle && !baseVehicle.endsWith(rawYear)) {
+    baseVehicle = `${baseVehicle} ${rawYear}`;
+  } else if (rawYear && !baseVehicle) {
+    baseVehicle = rawYear;
+  }
+
+  // 2. Vehicle Color ("colored ...")
+  const rawColor = String(reportData.vehicleColor || '')
+    .trim()
+    .replace(/^colored\s+/i, '');
+  const colorClause = rawColor ? `colored ${rawColor.toLowerCase()}` : '';
+
+  // 3. Plate Number ("bearing plate number ...")
+  const rawPlate = String(reportData.plateNumber || '')
+    .trim()
+    .replace(/^bearing\s+plate\s+number\s+/i, '');
+  const plateClause = rawPlate ? `bearing plate number ${rawPlate.toUpperCase()}` : '';
+
+  const vehicleSegment = [baseVehicle, colorClause, plateClause].filter(Boolean).join(', ');
+
+  // 4. Driver Full Name ("and driven by ...")
+  const nameParts: string[] = [];
+  if (info?.firstName?.trim()) nameParts.push(capitalizeWords(info.firstName.trim()));
+  if (info?.middleName?.trim()) {
+    const mid = info.middleName.trim();
+    const formattedMid = mid.length === 1 ? `${mid}.` : mid;
+    nameParts.push(capitalizeWords(formattedMid));
+  }
+  if (info?.lastName?.trim()) nameParts.push(capitalizeWords(info.lastName.trim()));
+  if (info?.suffix?.trim() && info.suffix.trim().toLowerCase() !== 'none') {
+    nameParts.push(capitalizeWords(info.suffix.trim()));
+  }
+  const fullName = nameParts.join(' ');
+
+  // 5. Driver Age, DOB + Sex, Civil Status, Occupation + Resident Address
+  const driverDetails: string[] = [];
+  if (fullName) {
+    driverDetails.push(fullName);
+  }
+
+  if (info?.age !== null && info?.age !== undefined && String(info.age).trim() !== '') {
+    driverDetails.push(`${info.age} years old`);
+  }
+
+  const dobStr = info?.birthday?.trim() ? `(DOB: ${formatHumanDate(info.birthday)})` : '';
+  const sexStr = info?.sex?.trim() ? info.sex.trim().toLowerCase() : '';
+  if (dobStr && sexStr) {
+    driverDetails.push(`${dobStr} ${sexStr}`);
+  } else if (dobStr) {
+    driverDetails.push(dobStr);
+  } else if (sexStr) {
+    driverDetails.push(sexStr);
+  }
+
+  if (info?.civilStatus?.trim()) {
+    driverDetails.push(info.civilStatus.trim().toLowerCase());
+  }
+
+  const occStr = info?.occupation?.trim() ? info.occupation.trim().toLowerCase() : '';
+  const addrStr = info?.address?.trim() ? info.address.trim().replace(/\.+$/, '') : '';
+
+  if (occStr && addrStr) {
+    driverDetails.push(`${occStr} and resident of ${addrStr}`);
+  } else if (occStr) {
+    driverDetails.push(occStr);
+  } else if (addrStr) {
+    driverDetails.push(`resident of ${addrStr}`);
+  }
+
+  const driverClause = driverDetails.join(', ');
+
+  let combined = '';
+  if (vehicleSegment && driverClause) {
+    combined = `${vehicleSegment} and driven by ${driverClause}.`;
+  } else if (vehicleSegment) {
+    combined = `${vehicleSegment}.`;
+  } else if (driverClause) {
+    combined = `Driven by ${driverClause}.`;
+  }
+
+  const contactStr = info?.contactNumber?.trim() || '';
+  if (contactStr) {
+    combined = combined ? `${combined} ${contactStr}` : contactStr;
+  }
+
+  return combined.trim();
+}
+
+/**
  * Generic section formatter: transforms key-value pairs into clean plain text,
  * omitting empty or undefined values, and omitting labels as requested.
  */

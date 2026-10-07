@@ -6,7 +6,7 @@ import { CopySectionButton } from '../common/CopySectionButton';
 import { CopyReportButton } from '../common/CopyReportButton';
 import { StatusBadge } from '../common/StatusBadge';
 import { DynamicReportFields } from '../form/DynamicReportFields';
-import { formatPersonalInformationText, formatSectionText } from '../../utils/formatters';
+import { formatPersonalInformationText, formatVehicularAccidentText, formatSectionText } from '../../utils/formatters';
 import { formatHumanDate, formatHumanDateTime } from '../../utils/dateUtils';
 import { 
   getGoogleDriveAccessToken, 
@@ -184,10 +184,13 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
   const safeAuditLogs = normalizeFirestoreArray(report.auditLogs);
 
   // Formatted plain texts for copy buttons
+  const isVehicular = report.reportType === 'vehicular-incident';
   const personalInfoFormatted = formatPersonalInformationText(personalInfo);
+  const vehicularAccidentFormatted = formatVehicularAccidentText(personalInfo, reportData);
+  const primaryFormattedEntry = isVehicular ? vehicularAccidentFormatted : personalInfoFormatted;
   const completeReportFormatted = reportConfig 
     ? reportConfig.generateTemplate(personalInfo, reportData, report.referenceNumber)
-    : '';
+    : primaryFormattedEntry;
 
   const handleStatusChange = (status: ReportStatus) => {
     onUpdateStatus(report.id, status);
@@ -348,21 +351,90 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Columns: Client Personal Information & Investigation Sections */}
         <div className="lg:col-span-2 space-y-6">
+          {/* READY-TO-COPY OFFICIAL BLOTTER PARAGRAPH */}
+          <div className="bg-white rounded-xl border-2 border-blue-900 shadow-sm overflow-hidden">
+            <div className="px-5 py-3.5 bg-blue-950 text-white flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-amber-400" />
+                <h3 className="text-xs sm:text-sm font-extrabold tracking-wider uppercase">
+                  {isVehicular
+                    ? 'Official Vehicular Accident Blotter Format (Ready to Copy)'
+                    : 'Official Personal Information Blotter Format (Ready to Copy)'}
+                </h3>
+              </div>
+              <CopySectionButton
+                sectionTitle={isVehicular ? 'Vehicular Accident Entry' : 'Personal Information Entry'}
+                formattedText={primaryFormattedEntry}
+                className="border-amber-400"
+              />
+            </div>
+            <div className="p-5 bg-blue-50/40">
+              <p className="text-xs sm:text-sm font-semibold text-slate-900 leading-relaxed select-all font-mono bg-white p-4 rounded-lg border border-blue-200 shadow-2xs">
+                {primaryFormattedEntry || '—'}
+              </p>
+            </div>
+          </div>
+
           {/* CLIENT SUBMITTED PERSONAL INFORMATION */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="px-5 py-3.5 bg-blue-950 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Shield className="w-4 h-4 text-amber-400" />
                 <h3 className="text-xs sm:text-sm font-extrabold tracking-wider uppercase">
-                  Client Personal Information (Mula sa Publiko)
+                  {isVehicular
+                    ? 'Submitted Vehicle & Driver Information (Mula sa Publiko)'
+                    : 'Client Personal Information (Mula sa Publiko)'}
                 </h3>
               </div>
               <CopySectionButton
-                sectionTitle="Personal Information"
-                formattedText={personalInfoFormatted}
+                sectionTitle={isVehicular ? 'Vehicular & Driver Info' : 'Personal Information'}
+                formattedText={primaryFormattedEntry}
                 className="border-blue-400"
               />
             </div>
+
+            {isVehicular && (
+              <div className="p-5 bg-amber-50/40 border-b border-slate-200 divide-y divide-amber-200/60 text-xs sm:text-sm">
+                <div className="pb-2">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-amber-900">
+                    Vehicle Details (Impormasyon ng Sasakyan)
+                  </span>
+                </div>
+                <div className="py-2.5 flex items-center justify-between gap-4">
+                  <div className="w-2/3">
+                    <span className="text-slate-500 font-medium block text-xs">Vehicle Make & Model (Taták at Modelo)</span>
+                    <span className="font-bold text-slate-900">
+                      {reportData.vehicleMakeModel || [reportData.vehicleMake, reportData.vehicleModel].filter(Boolean).join(' ') || '—'}
+                    </span>
+                  </div>
+                  <CopyButton
+                    value={reportData.vehicleMakeModel || [reportData.vehicleMake, reportData.vehicleModel].filter(Boolean).join(' ')}
+                    label="Vehicle Make & Model"
+                  />
+                </div>
+                <div className="py-2.5 flex items-center justify-between gap-4">
+                  <div className="w-2/3">
+                    <span className="text-slate-500 font-medium block text-xs">Vehicle Year Model (Taon ng Sasakyan)</span>
+                    <span className="font-bold text-slate-900">{reportData.vehicleYear || '—'}</span>
+                  </div>
+                  <CopyButton value={reportData.vehicleYear} label="Vehicle Year" />
+                </div>
+                <div className="py-2.5 flex items-center justify-between gap-4">
+                  <div className="w-2/3">
+                    <span className="text-slate-500 font-medium block text-xs">Vehicle Color (Kulay — "colored ...")</span>
+                    <span className="font-bold text-slate-900">{reportData.vehicleColor || '—'}</span>
+                  </div>
+                  <CopyButton value={reportData.vehicleColor} label="Vehicle Color" />
+                </div>
+                <div className="py-2.5 flex items-center justify-between gap-4">
+                  <div className="w-2/3">
+                    <span className="text-slate-500 font-medium block text-xs">Plate Number (Numero ng Plaka — "bearing plate number ...")</span>
+                    <span className="font-bold font-mono text-slate-900">{reportData.plateNumber || '—'}</span>
+                  </div>
+                  <CopyButton value={reportData.plateNumber} label="Plate Number" />
+                </div>
+              </div>
+            )}
 
             <div className="p-5 divide-y divide-slate-100 text-xs sm:text-sm">
               {/* 1. First Name */}
