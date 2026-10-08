@@ -372,31 +372,7 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Columns: Client Personal Information & Investigation Sections */}
         <div className="lg:col-span-2 space-y-6">
-          {/* READY-TO-COPY OFFICIAL BLOTTER PARAGRAPH */}
-          <div className="bg-white rounded-xl border-2 border-blue-900 shadow-sm overflow-hidden">
-            <div className="px-5 py-3.5 bg-blue-950 text-white flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-amber-400" />
-                <h3 className="text-xs sm:text-sm font-extrabold tracking-wider uppercase">
-                  {isVehicular
-                    ? 'Official Vehicular Accident Blotter Format (Vehicle & Driver Only)'
-                    : 'Official Personal Information Blotter Format (Ready to Copy)'}
-                </h3>
-              </div>
-              <CopySectionButton
-                sectionTitle={isVehicular ? 'Vehicular Accident Entry' : 'Personal Information Entry'}
-                formattedText={primaryFormattedEntry}
-                className="border-amber-400"
-              />
-            </div>
-            <div className="p-5 bg-blue-50/40">
-              <p className="text-xs sm:text-sm font-semibold text-slate-900 leading-relaxed select-all font-mono bg-white p-4 rounded-lg border border-blue-200 shadow-2xs">
-                {primaryFormattedEntry || '—'}
-              </p>
-            </div>
-          </div>
-
-          {/* STANDALONE PLACE & TIME OF INCIDENT SECTION FOR VEHICULAR ACCIDENT */}
+          {/* STANDALONE PLACE & TIME OF INCIDENT SECTION FOR VEHICULAR ACCIDENT (ON TOP) */}
           {isVehicular && (
             <div className="bg-white rounded-xl border-2 border-amber-500 shadow-sm overflow-hidden">
               <div className="px-5 py-3.5 bg-amber-900 text-white flex items-center justify-between gap-3 flex-wrap">
@@ -466,6 +442,30 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
               </div>
             </div>
           )}
+
+          {/* READY-TO-COPY OFFICIAL BLOTTER PARAGRAPH */}
+          <div className="bg-white rounded-xl border-2 border-blue-900 shadow-sm overflow-hidden">
+            <div className="px-5 py-3.5 bg-blue-950 text-white flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-amber-400" />
+                <h3 className="text-xs sm:text-sm font-extrabold tracking-wider uppercase">
+                  {isVehicular
+                    ? 'Official Vehicular Accident Blotter Format (Vehicle & Driver Only)'
+                    : 'Official Personal Information Blotter Format (Ready to Copy)'}
+                </h3>
+              </div>
+              <CopySectionButton
+                sectionTitle={isVehicular ? 'Vehicular Accident Entry' : 'Personal Information Entry'}
+                formattedText={primaryFormattedEntry}
+                className="border-amber-400"
+              />
+            </div>
+            <div className="p-5 bg-blue-50/40">
+              <p className="text-xs sm:text-sm font-semibold text-slate-900 leading-relaxed select-all font-mono bg-white p-4 rounded-lg border border-blue-200 shadow-2xs">
+                {primaryFormattedEntry || '—'}
+              </p>
+            </div>
+          </div>
 
           {/* CLIENT SUBMITTED PERSONAL INFORMATION */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
