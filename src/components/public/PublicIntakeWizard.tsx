@@ -12,8 +12,11 @@ import { BackgroundWatermark } from '../common/BackgroundWatermark';
 import { PWAInstallButton } from '../common/PWAInstallButton';
 import { PublicFooter } from './PublicFooter';
 import { generateReferenceNumber } from '../../utils/referenceNumber';
-import { formatHumanDate } from '../../utils/dateUtils';
-import { formatVehicularAccidentText } from '../../utils/formatters';
+import { formatHumanDate, formatHumanDateTime } from '../../utils/dateUtils';
+import {
+  formatVehicularAccidentText,
+  formatPlaceAndTimeText,
+} from '../../utils/formatters';
 import { 
   CheckCircle2, 
   Shield, 
@@ -29,7 +32,9 @@ import {
   HelpCircle,
   FileText,
   ArrowLeft,
-  Camera
+  Camera,
+  MapPin,
+  Clock
 } from 'lucide-react';
 
 interface PublicIntakeWizardProps {
@@ -41,6 +46,8 @@ interface PublicIntakeWizardProps {
 type PublicWizardMode = 'select' | 'personal-intake' | 'vehicular-incident';
 
 interface VehicularAccidentFields {
+  placeOfIncident: string;
+  incidentTime: string;
   vehicleMake: string;
   vehicleModel: string;
   vehicleYear: string;
@@ -64,6 +71,8 @@ const INITIAL_PERSONAL_INFO: PersonalInformation = {
 };
 
 const INITIAL_VEHICULAR_FIELDS: VehicularAccidentFields = {
+  placeOfIncident: '',
+  incidentTime: '',
   vehicleMake: '',
   vehicleModel: '',
   vehicleYear: '',
@@ -83,8 +92,30 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [personalInfo, setPersonalInfo] = useState<PersonalInformation>(INITIAL_PERSONAL_INFO);
   const [vehicularFields, setVehicularFields] = useState<VehicularAccidentFields>(INITIAL_VEHICULAR_FIELDS);
+  const [incidentDatePicker, setIncidentDatePicker] = useState<string>('');
+  const [incidentTimePicker, setIncidentTimePicker] = useState<string>('');
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [clientReferenceNumber, setClientReferenceNumber] = useState<string>(() => generateReferenceNumber());
+
+  const formatPickedDateAndTime = (dateVal: string, timeVal: string): string => {
+    const datePart = dateVal ? formatHumanDate(dateVal) : '';
+    let timePart = '';
+    if (timeVal) {
+      const [hStr, mStr] = timeVal.split(':');
+      const h = parseInt(hStr, 10);
+      if (!isNaN(h) && mStr !== undefined) {
+        const period = h >= 12 ? 'PM' : 'AM';
+        const hour12 = h % 12 || 12;
+        timePart = `${hour12}:${mStr} ${period}`;
+      } else {
+        timePart = timeVal;
+      }
+    }
+    if (datePart && timePart) return `${datePart} at ${timePart}`;
+    if (datePart) return datePart;
+    if (timePart) return timePart;
+    return '';
+  };
   
   // Validation errors
   const [personalErrors, setPersonalErrors] = useState<Partial<Record<keyof PersonalInformation, string>>>({});
@@ -140,6 +171,12 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
   // Validate Vehicular Info
   const validateVehicularInfo = (): boolean => {
     const vErrs: Partial<Record<keyof VehicularAccidentFields, string>> = {};
+    if (!vehicularFields.placeOfIncident.trim()) {
+      vErrs.placeOfIncident = 'Place of Incident is required (Kailangan ang Lugar ng Insidente).';
+    }
+    if (!vehicularFields.incidentTime.trim()) {
+      vErrs.incidentTime = 'Time of Incident is required (Kailangan ang Oras / Petsa ng Insidente).';
+    }
     if (!vehicularFields.vehicleMake.trim()) {
       vErrs.vehicleMake = 'Vehicle Make / Brand is required (Hal. Mitsubishi, Toyota, Honda).';
     }
@@ -196,6 +233,9 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
       personalInformation: { ...personalInfo },
       reportData: isVehicular
         ? {
+            placeOfIncident: vehicularFields.placeOfIncident.trim(),
+            location: vehicularFields.placeOfIncident.trim(),
+            incidentTime: vehicularFields.incidentTime.trim(),
             vehicleMake: vehicularFields.vehicleMake.trim(),
             vehicleModel: vehicularFields.vehicleModel.trim(),
             vehicleYear: vehicularFields.vehicleYear.trim(),
@@ -240,6 +280,8 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
     setCurrentStep(1);
     setPersonalInfo(INITIAL_PERSONAL_INFO);
     setVehicularFields(INITIAL_VEHICULAR_FIELDS);
+    setIncidentDatePicker('');
+    setIncidentTimePicker('');
     setAttachments([]);
     setClientReferenceNumber(generateReferenceNumber());
     setSubmissionResult(null);
@@ -263,6 +305,11 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
     vehicleYear: vehicularFields.vehicleYear,
     vehicleColor: vehicularFields.vehicleColor,
     plateNumber: vehicularFields.plateNumber,
+  });
+
+  const formattedPlaceAndTime = formatPlaceAndTimeText({
+    placeOfIncident: vehicularFields.placeOfIncident,
+    incidentTime: vehicularFields.incidentTime,
   });
 
   return (
@@ -547,12 +594,189 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                ================================================================= */}
             {currentStep === 1 && wizardMode === 'vehicular-incident' && (
               <div className="space-y-6 animate-fadeIn">
-                {/* Part 1: Vehicle Details */}
+                {/* Part 1: Place & Time of Incident (Own Standalone Section) */}
+                <div className="bg-white/85 rounded-xl p-5 sm:p-7 border border-blue-300/90 shadow-xs space-y-5">
+                  <div className="border-b border-slate-200 pb-4">
+                    <span className="text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5 mb-1">
+                      <MapPin className="w-4 h-4 text-blue-700" />
+                      <span>Vehicular Accident Entry • Part 1 of 3</span>
+                    </span>
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                      Place & Time of Incident (Lugar at Oras ng Insidente)
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                      Ilagay ang eksaktong lugar at oras/petsa ng insidente. Ito ay may sariling hiwalay na Copy section (maaaring kopyahin nang sabay o tig-isa) at hindi ihahalo sa full blotter copy.
+                    </p>
+                  </div>
+
+                  <div className="space-y-6">
+                    {/* 1. Place of Incident (Full-Width Spacious Input) */}
+                    <div>
+                      <label className="block text-sm font-extrabold text-slate-900 mb-1.5">
+                        1. Place of Incident <span className="text-rose-600">*</span>
+                        <span className="block text-xs font-medium text-slate-500 mt-0.5">
+                          (Eksaktong Lugar ng Insidente — Kalye, Sitio, Barangay, Bayan/Lungsod)
+                        </span>
+                      </label>
+                      <input
+                        type="text"
+                        value={vehicularFields.placeOfIncident}
+                        onChange={(e) => {
+                          setVehicularFields((prev) => ({
+                            ...prev,
+                            placeOfIncident: e.target.value,
+                          }));
+                          if (vehicularErrors.placeOfIncident) {
+                            setVehicularErrors((prev) => ({ ...prev, placeOfIncident: undefined }));
+                          }
+                        }}
+                        placeholder="e.g. National Highway, Brgy. Manghinao Proper, Bauan, Batangas"
+                        className={`w-full px-4 py-3.5 text-sm sm:text-base font-medium rounded-xl border-2 bg-white text-slate-900 focus:outline-none focus:ring-4 transition-all ${
+                          vehicularErrors.placeOfIncident
+                            ? 'border-rose-400 focus:ring-rose-500/20'
+                            : 'border-slate-300 focus:border-blue-700 focus:ring-blue-500/15'
+                        }`}
+                      />
+                      {vehicularErrors.placeOfIncident && (
+                        <p className="text-xs text-rose-600 font-semibold mt-1.5">
+                          {vehicularErrors.placeOfIncident}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* 2. Date & Time of Incident (Large, Easy-to-Use UI) */}
+                    <div className="p-4 sm:p-5 rounded-xl bg-slate-50/90 border border-slate-200/90 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div>
+                          <label className="block text-sm font-extrabold text-slate-900">
+                            2. Time & Date of Incident <span className="text-rose-600">*</span>
+                          </label>
+                          <span className="block text-xs text-slate-500 mt-0.5">
+                            Pumili ng Petsa at Oras sa ibaba o i-type nang direkta ang oras ng insidente.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const now = new Date();
+                            const yyyy = now.getFullYear();
+                            const mm = String(now.getMonth() + 1).padStart(2, '0');
+                            const dd = String(now.getDate()).padStart(2, '0');
+                            const hh = String(now.getHours()).padStart(2, '0');
+                            const min = String(now.getMinutes()).padStart(2, '0');
+                            const dStr = `${yyyy}-${mm}-${dd}`;
+                            const tStr = `${hh}:${min}`;
+                            setIncidentDatePicker(dStr);
+                            setIncidentTimePicker(tStr);
+                            const formatted = formatPickedDateAndTime(dStr, tStr);
+                            setVehicularFields((prev) => ({
+                              ...prev,
+                              incidentTime: formatted,
+                            }));
+                            if (vehicularErrors.incidentTime) {
+                              setVehicularErrors((prev) => ({ ...prev, incidentTime: undefined }));
+                            }
+                          }}
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-950 text-white text-xs sm:text-sm font-bold shadow-xs cursor-pointer transition-all active:scale-[0.98] shrink-0"
+                        >
+                          <Clock className="w-4 h-4 text-amber-300" />
+                          <span>Gamitin ang Petsa at Oras Ngayon (Set Now)</span>
+                        </button>
+                      </div>
+
+                      {/* Large 2-Column Date Picker & Time Picker */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                          <label className="block text-xs font-bold uppercase tracking-wider text-blue-900 mb-1.5">
+                            A. Select Date (Petsa ng Insidente)
+                          </label>
+                          <input
+                            type="date"
+                            value={incidentDatePicker}
+                            onChange={(e) => {
+                              const newDate = e.target.value;
+                              setIncidentDatePicker(newDate);
+                              const combined = formatPickedDateAndTime(newDate, incidentTimePicker);
+                              if (combined) {
+                                setVehicularFields((prev) => ({
+                                  ...prev,
+                                  incidentTime: combined,
+                                }));
+                                if (vehicularErrors.incidentTime) {
+                                  setVehicularErrors((prev) => ({ ...prev, incidentTime: undefined }));
+                                }
+                              }
+                            }}
+                            className="w-full px-4 py-3 text-base font-bold rounded-xl border-2 border-slate-300 hover:border-blue-600 focus:border-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-500/15 bg-slate-50/60 text-slate-900 cursor-pointer transition-all"
+                          />
+                        </div>
+
+                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                          <label className="block text-xs font-bold uppercase tracking-wider text-blue-900 mb-1.5">
+                            B. Select Time (Oras ng Insidente)
+                          </label>
+                          <input
+                            type="time"
+                            value={incidentTimePicker}
+                            onChange={(e) => {
+                              const newTime = e.target.value;
+                              setIncidentTimePicker(newTime);
+                              const combined = formatPickedDateAndTime(incidentDatePicker, newTime);
+                              if (combined) {
+                                setVehicularFields((prev) => ({
+                                  ...prev,
+                                  incidentTime: combined,
+                                }));
+                                if (vehicularErrors.incidentTime) {
+                                  setVehicularErrors((prev) => ({ ...prev, incidentTime: undefined }));
+                                }
+                              }
+                            }}
+                            className="w-full px-4 py-3 text-base font-bold rounded-xl border-2 border-slate-300 hover:border-blue-600 focus:border-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-500/15 bg-slate-50/60 text-slate-900 cursor-pointer transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Formatted / Editable Time & Date Result Input */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          Formatted Time & Date of Incident (Maaari ring i-type o i-edit dito):
+                        </label>
+                        <input
+                          type="text"
+                          value={vehicularFields.incidentTime}
+                          onChange={(e) => {
+                            setVehicularFields((prev) => ({
+                              ...prev,
+                              incidentTime: e.target.value,
+                            }));
+                            if (vehicularErrors.incidentTime) {
+                              setVehicularErrors((prev) => ({ ...prev, incidentTime: undefined }));
+                            }
+                          }}
+                          placeholder="e.g. October 8, 2026 at 2:30 PM (or Around 2:30 PM)"
+                          className={`w-full px-4 py-3 text-sm sm:text-base font-semibold rounded-xl border-2 bg-white text-slate-900 focus:outline-none focus:ring-4 transition-all ${
+                            vehicularErrors.incidentTime
+                              ? 'border-rose-400 focus:ring-rose-500/20'
+                              : 'border-slate-300 focus:border-blue-700 focus:ring-blue-500/15'
+                          }`}
+                        />
+                        {vehicularErrors.incidentTime && (
+                          <p className="text-xs text-rose-600 font-semibold mt-1.5">
+                            {vehicularErrors.incidentTime}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Part 2: Vehicle Details */}
                 <div className="bg-white/80 rounded-xl p-5 sm:p-7 border border-amber-300/90 shadow-xs space-y-5">
                   <div className="border-b border-slate-200 pb-4">
                     <span className="text-xs font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1.5 mb-1">
                       <Car className="w-4 h-4 text-amber-700" />
-                      <span>Vehicular Accident Entry • Part 1 of 2</span>
+                      <span>Vehicular Accident Entry • Part 2 of 3</span>
                     </span>
                     <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                       Vehicle Information (Impormasyon ng Sasakyan)
@@ -737,12 +961,12 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                   </div>
                 </div>
 
-                {/* Part 2: Driver Personal Information ("and driven by...") */}
+                {/* Part 3: Driver Personal Information ("and driven by...") */}
                 <div className="bg-white/75 rounded-xl p-5 sm:p-7 border border-slate-200/80 shadow-xs space-y-6">
                   <div className="border-b border-slate-200 pb-4">
                     <span className="text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5 mb-1">
                       <UserCheck className="w-4 h-4 text-blue-700" />
-                      <span>Vehicular Accident Entry • Part 2 of 2</span>
+                      <span>Vehicular Accident Entry • Part 3 of 3</span>
                     </span>
                     <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                       Driver Information (Impormasyon ng Nagmamaneho / Driven By)
@@ -759,7 +983,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                   />
                 </div>
 
-                {/* Part 3 (Optional): Valid ID / Driver License / Live Capture Photo */}
+                {/* Part 4 (Optional): Valid ID / Driver License / Live Capture Photo */}
                 <div className="bg-white/80 rounded-xl p-5 sm:p-7 border border-slate-200/80 shadow-xs space-y-4">
                   <div className="border-b border-slate-200 pb-3 flex items-center justify-between gap-2">
                     <div>
@@ -785,13 +1009,72 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                   />
                 </div>
 
-                {/* Live Official Vehicular Accident Format Preview */}
+                {/* Live Separate Section 1: Place & Time of Incident (Copy Both or Copy Single) */}
+                <div className="bg-blue-50/90 rounded-xl p-4 sm:p-5 border border-blue-300 shadow-xs space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-200 pb-2.5">
+                    <div>
+                      <span className="text-xs font-extrabold uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-blue-700" />
+                        <span>Place & Time of Incident (Separate Copy Section)</span>
+                      </span>
+                      <p className="text-[11px] text-slate-600">
+                        Hiwalay sa full blotter copy — Maaaring kopyahin nang sabay (Copy Both) o tig-isa (Single Copy).
+                      </p>
+                    </div>
+                    <CopyButton
+                      value={formattedPlaceAndTime}
+                      label="Both Place & Time of Incident"
+                      size="sm"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="bg-white/95 p-3 rounded-lg border border-blue-200 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                          Place of Incident (Single)
+                        </span>
+                        <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                          {vehicularFields.placeOfIncident || '—'}
+                        </p>
+                      </div>
+                      <CopyButton
+                        value={vehicularFields.placeOfIncident}
+                        label="Place of Incident"
+                        size="sm"
+                      />
+                    </div>
+
+                    <div className="bg-white/95 p-3 rounded-lg border border-blue-200 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                          Time of Incident (Single)
+                        </span>
+                        <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                          {vehicularFields.incidentTime || '—'}
+                        </p>
+                      </div>
+                      <CopyButton
+                        value={vehicularFields.incidentTime}
+                        label="Time of Incident"
+                        size="sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live Separate Section 2: Official Vehicular Accident Format Preview (Vehicle & Driver Only) */}
                 <div className="bg-amber-50/90 rounded-xl p-4 sm:p-5 border border-amber-300 shadow-xs space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-extrabold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
                       <FileText className="w-4 h-4 text-amber-700" />
-                      <span>Generated Police Blotter Format (Live Preview)</span>
+                      <span>Generated Police Blotter Format (Vehicle & Driver Only)</span>
                     </span>
+                    <CopyButton
+                      value={formattedVehicularSentence}
+                      label="Full Vehicle & Driver Blotter Format"
+                      size="sm"
+                    />
                   </div>
                   <p className="text-xs sm:text-sm font-mono text-slate-900 bg-white/90 p-3.5 rounded-lg border border-amber-200 leading-relaxed select-all">
                     {formattedVehicularSentence}
@@ -825,77 +1108,176 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                   </div>
                 </div>
 
-                {/* If Vehicular Accident: Show Official Formatted Paragraph + Vehicle Details */}
+                {/* If Vehicular Accident: Show Separate Place & Time Card + Official Formatted Paragraph + Vehicle Details */}
                 {wizardMode === 'vehicular-incident' && (
-                  <div className="bg-white/85 rounded-xl p-5 sm:p-6 border-2 border-amber-400 shadow-xs space-y-4">
-                    <div className="flex items-center justify-between border-b border-amber-200 pb-3">
-                      <div>
-                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800 block">
-                          Official Blotter Entry Preview
-                        </span>
-                        <h4 className="font-extrabold text-sm sm:text-base text-slate-900">
-                          VEHICULAR ACCIDENT RECORD (Sasakyan at Nagmamaneho)
-                        </h4>
+                  <>
+                    {/* Standalone Place & Time of Incident Review & Copy Card */}
+                    <div className="bg-white/90 rounded-xl p-5 sm:p-6 border-2 border-blue-400 shadow-xs space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-200 pb-3">
+                        <div>
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-800 block">
+                            Standalone Incident Location & Time (Not Mixed with Blotter Copy)
+                          </span>
+                          <h4 className="font-extrabold text-sm sm:text-base text-slate-900">
+                            PLACE & TIME OF INCIDENT (Lugar at Oras ng Insidente)
+                          </h4>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CopyButton
+                            value={formattedPlaceAndTime}
+                            label="Both Place & Time of Incident"
+                            size="sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleBackToEdit}
+                            className="inline-flex items-center gap-1 text-xs font-bold text-blue-900 hover:text-blue-950 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-300 cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>[EDIT]</span>
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleBackToEdit}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-amber-900 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-300 cursor-pointer"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>[EDIT]</span>
-                      </button>
-                    </div>
 
-                    <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-amber-900">
-                          Formatted Entry (Para sa Blotter):
-                        </span>
+                      {/* Combined Copy Preview */}
+                      <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-900 block">
+                            Copy Both (Place & Time Together):
+                          </span>
+                          <pre className="text-xs sm:text-sm font-mono font-semibold text-slate-900 whitespace-pre-wrap select-all">
+                            {formattedPlaceAndTime || '—'}
+                          </pre>
+                        </div>
                         <CopyButton
-                          value={formattedVehicularSentence}
-                          label="Copy Format"
+                          value={formattedPlaceAndTime}
+                          label="Both Place & Time"
                           size="sm"
                         />
                       </div>
-                      <p className="text-xs sm:text-sm font-mono font-semibold text-slate-900 leading-relaxed select-all">
-                        {formattedVehicularSentence}
-                      </p>
+
+                      {/* Individual Single Entity Copy Rows */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <dt className="text-slate-500 font-medium text-xs">
+                              1. Place of Incident (Lugar ng Insidente)
+                            </dt>
+                            <dd className="font-bold text-slate-900 mt-0.5 break-words">
+                              {vehicularFields.placeOfIncident || '—'}
+                            </dd>
+                          </div>
+                          <CopyButton
+                            value={vehicularFields.placeOfIncident}
+                            label="Place of Incident"
+                            size="sm"
+                          />
+                        </div>
+
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <dt className="text-slate-500 font-medium text-xs">
+                              2. Time of Incident (Oras at Petsa ng Insidente)
+                            </dt>
+                            <dd className="font-bold text-slate-900 mt-0.5 break-words">
+                              {vehicularFields.incidentTime || '—'}
+                            </dd>
+                          </div>
+                          <CopyButton
+                            value={vehicularFields.incidentTime}
+                            label="Time of Incident"
+                            size="sm"
+                          />
+                        </div>
+                      </div>
                     </div>
 
-                    <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs sm:text-sm pt-1">
-                      <div>
-                        <dt className="text-slate-500 font-medium">1. Vehicle Make / Brand</dt>
-                        <dd className="font-bold text-slate-900 mt-0.5">
-                          {vehicularFields.vehicleMake || '—'}
-                        </dd>
+                    {/* Vehicle & Driver Blotter Paragraph Card */}
+                    <div className="bg-white/85 rounded-xl p-5 sm:p-6 border-2 border-amber-400 shadow-xs space-y-4">
+                      <div className="flex items-center justify-between border-b border-amber-200 pb-3">
+                        <div>
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800 block">
+                            Official Blotter Entry Preview (Vehicle & Driver Only)
+                          </span>
+                          <h4 className="font-extrabold text-sm sm:text-base text-slate-900">
+                            VEHICULAR ACCIDENT RECORD (Sasakyan at Nagmamaneho)
+                          </h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleBackToEdit}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-amber-900 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-300 cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>[EDIT]</span>
+                        </button>
                       </div>
-                      <div>
-                        <dt className="text-slate-500 font-medium">2. Vehicle Model</dt>
-                        <dd className="font-bold text-slate-900 mt-0.5">
-                          {vehicularFields.vehicleModel || '—'}
-                        </dd>
+
+                      <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-900">
+                            Formatted Entry (Full Copy Clipboard — Vehicle & Driver Only):
+                          </span>
+                          <CopyButton
+                            value={formattedVehicularSentence}
+                            label="Copy Format"
+                            size="sm"
+                          />
+                        </div>
+                        <p className="text-xs sm:text-sm font-mono font-semibold text-slate-900 leading-relaxed select-all">
+                          {formattedVehicularSentence}
+                        </p>
                       </div>
-                      <div>
-                        <dt className="text-slate-500 font-medium">3. Year Model</dt>
-                        <dd className="font-mono font-bold text-slate-900 mt-0.5">
-                          {vehicularFields.vehicleYear || '—'}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-slate-500 font-medium">4. Vehicle Color</dt>
-                        <dd className="font-bold text-slate-900 mt-0.5">
-                          {vehicularFields.vehicleColor || '—'}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-slate-500 font-medium">5. Plate Number</dt>
-                        <dd className="font-mono font-bold text-slate-900 mt-0.5">
-                          {vehicularFields.plateNumber || '—'}
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
+
+                      <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs sm:text-sm pt-1">
+                        <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <dt className="text-slate-500 font-medium text-[11px]">1. Make / Brand</dt>
+                            <dd className="font-bold text-slate-900 mt-0.5 truncate">
+                              {vehicularFields.vehicleMake || '—'}
+                            </dd>
+                          </div>
+                          <CopyButton value={vehicularFields.vehicleMake} label="Vehicle Make" size="sm" />
+                        </div>
+                        <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <dt className="text-slate-500 font-medium text-[11px]">2. Vehicle Model</dt>
+                            <dd className="font-bold text-slate-900 mt-0.5 truncate">
+                              {vehicularFields.vehicleModel || '—'}
+                            </dd>
+                          </div>
+                          <CopyButton value={vehicularFields.vehicleModel} label="Vehicle Model" size="sm" />
+                        </div>
+                        <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <dt className="text-slate-500 font-medium text-[11px]">3. Year Model</dt>
+                            <dd className="font-mono font-bold text-slate-900 mt-0.5 truncate">
+                              {vehicularFields.vehicleYear || '—'}
+                            </dd>
+                          </div>
+                          <CopyButton value={vehicularFields.vehicleYear} label="Vehicle Year" size="sm" />
+                        </div>
+                        <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <dt className="text-slate-500 font-medium text-[11px]">4. Vehicle Color</dt>
+                            <dd className="font-bold text-slate-900 mt-0.5 truncate">
+                              {vehicularFields.vehicleColor || '—'}
+                            </dd>
+                          </div>
+                          <CopyButton value={vehicularFields.vehicleColor} label="Vehicle Color" size="sm" />
+                        </div>
+                        <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <dt className="text-slate-500 font-medium text-[11px]">5. Plate Number</dt>
+                            <dd className="font-mono font-bold text-slate-900 mt-0.5 truncate">
+                              {vehicularFields.plateNumber || '—'}
+                            </dd>
+                          </div>
+                          <CopyButton value={vehicularFields.plateNumber} label="Plate Number" size="sm" />
+                        </div>
+                      </dl>
+                    </div>
+                  </>
                 )}
 
                 {/* Personal Information Review */}
@@ -1172,22 +1554,71 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                   </div>
                 </div>
 
-                {/* If Vehicular Accident, also show the formatted paragraph for quick copy */}
+                {/* If Vehicular Accident, show BOTH the separate Place & Time section AND the unmixed Vehicle & Driver paragraph */}
                 {submissionResult.reportType === 'vehicular-incident' && (
-                  <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl text-left space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-extrabold uppercase tracking-wider text-amber-900">
-                        Submitted Vehicular Accident Format:
-                      </span>
-                      <CopyButton
-                        value={formattedVehicularSentence}
-                        label="Copy Blotter Text"
-                        size="sm"
-                      />
+                  <div className="space-y-4">
+                    {/* Separate Place & Time Copy Section */}
+                    <div className="p-4 bg-blue-50 border border-blue-300 rounded-xl text-left space-y-3">
+                      <div className="flex items-center justify-between gap-2 border-b border-blue-200 pb-2">
+                        <span className="text-xs font-extrabold uppercase tracking-wider text-blue-950">
+                          Place & Time of Incident (Copy Both or Single):
+                        </span>
+                        <CopyButton
+                          value={formattedPlaceAndTime}
+                          label="Both Place & Time"
+                          size="sm"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div className="bg-white p-2.5 rounded-lg border border-blue-200 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                              Place of Incident
+                            </span>
+                            <p className="text-xs font-bold text-slate-900 truncate">
+                              {vehicularFields.placeOfIncident || '—'}
+                            </p>
+                          </div>
+                          <CopyButton
+                            value={vehicularFields.placeOfIncident}
+                            label="Place of Incident"
+                            size="sm"
+                          />
+                        </div>
+                        <div className="bg-white p-2.5 rounded-lg border border-blue-200 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                              Time of Incident
+                            </span>
+                            <p className="text-xs font-bold text-slate-900 truncate">
+                              {vehicularFields.incidentTime || '—'}
+                            </p>
+                          </div>
+                          <CopyButton
+                            value={vehicularFields.incidentTime}
+                            label="Time of Incident"
+                            size="sm"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-xs font-mono text-slate-900 bg-white p-3 rounded-lg border border-amber-200 leading-relaxed select-all">
-                      {formattedVehicularSentence}
-                    </p>
+
+                    {/* Full Blotter Copy (Strictly Vehicle & Driver Only) */}
+                    <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl text-left space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-extrabold uppercase tracking-wider text-amber-900">
+                          Submitted Vehicular Accident Format (Full Copy — Vehicle & Driver Only):
+                        </span>
+                        <CopyButton
+                          value={formattedVehicularSentence}
+                          label="Copy Blotter Text"
+                          size="sm"
+                        />
+                      </div>
+                      <p className="text-xs font-mono text-slate-900 bg-white p-3 rounded-lg border border-amber-200 leading-relaxed select-all">
+                        {formattedVehicularSentence}
+                      </p>
+                    </div>
                   </div>
                 )}
 

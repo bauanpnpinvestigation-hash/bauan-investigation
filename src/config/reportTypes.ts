@@ -231,38 +231,32 @@ export const REPORT_TYPES: Record<string, ReportTypeDefinition> = {
       },
       {
         id: 'incident-info',
-        titleEn: 'Incident Information',
-        titleFil: 'Impormasyon ng Insidente',
-        description: 'Time, location, and circumstances of the incident.',
+        titleEn: 'Place & Time of Incident',
+        titleFil: 'Lugar at Oras ng Insidente',
+        description: 'Standalone section for Place and Time of Incident (kept separate from the full vehicle & driver blotter copy).',
         fields: [
           {
-            id: 'incidentDate',
-            labelEn: 'Date',
-            labelFil: 'Petsa',
-            type: 'date',
+            id: 'placeOfIncident',
+            labelEn: 'Place of Incident',
+            labelFil: 'Lugar ng Insidente',
+            type: 'text',
             required: true,
+            placeholder: 'e.g. National Highway, Brgy. Manghinao Proper, Bauan, Batangas',
           },
           {
             id: 'incidentTime',
-            labelEn: 'Time',
-            labelFil: 'Oras',
-            type: 'time',
-            required: true,
-          },
-          {
-            id: 'location',
-            labelEn: 'Location',
-            labelFil: 'Lugar',
+            labelEn: 'Time of Incident',
+            labelFil: 'Oras at Petsa ng Insidente',
             type: 'text',
             required: true,
-            placeholder: 'Exact street, landmark, barangay, municipality/city',
+            placeholder: 'e.g. October 8, 2026 at 2:30 PM',
           },
           {
             id: 'incidentType',
-            labelEn: 'Incident Type',
+            labelEn: 'Incident Type (Optional Officer Note)',
             labelFil: 'Uri ng Insidente',
             type: 'select',
-            required: true,
+            required: false,
             options: [
               { label: 'Rear-end Collision (Banggaan sa Likod)', value: 'Rear-end Collision' },
               { label: 'Side Impact / T-Bone (Banggaan sa Gilid)', value: 'Side Impact' },
@@ -277,12 +271,12 @@ export const REPORT_TYPES: Record<string, ReportTypeDefinition> = {
           },
           {
             id: 'narrative',
-            labelEn: 'Narrative / Description',
+            labelEn: 'Narrative / Description (Optional Officer Note)',
             labelFil: 'Salaysay / Paglalarawan',
             type: 'textarea',
-            required: true,
+            required: false,
             placeholder: 'Provide a detailed narrative of what transpired before, during, and after the incident.',
-            rows: 5,
+            rows: 4,
           },
         ],
       },
@@ -377,60 +371,10 @@ export const REPORT_TYPES: Record<string, ReportTypeDefinition> = {
         ],
       },
     ],
-    generateTemplate: (personalInfo, reportData, referenceNumber) => {
-      const parts: string[] = [];
-
-      const vehicularBlotterParagraph = formatVehicularAccidentText(personalInfo, reportData);
-      if (vehicularBlotterParagraph) {
-        parts.push(vehicularBlotterParagraph);
-        parts.push('');
-      }
-
-      // Optional officer investigation fields if filled in
-      const incidentFields = [
-        { label: 'Date', value: formatHumanDate(reportData.incidentDate) },
-        { label: 'Time', value: reportData.incidentTime },
-        { label: 'Location', value: reportData.location },
-        { label: 'Incident Type', value: reportData.incidentType },
-      ];
-      const incidentText = formatSectionText('INCIDENT INFORMATION', incidentFields);
-      if (incidentText) {
-        parts.push(incidentText);
-        parts.push('');
-      }
-
-      if (reportData.narrative?.trim()) {
-        parts.push('NARRATIVE');
-        parts.push(reportData.narrative.trim());
-        parts.push('');
-      }
-
-      const otherPartyFields = [
-        { label: 'Other Party Name', value: reportData.otherPartyName },
-        { label: 'Other Party Contact', value: reportData.otherPartyContact },
-        { label: 'Other Party Vehicle', value: reportData.otherPartyVehicle },
-        { label: 'Other Party Plate Number', value: reportData.otherPartyPlateNumber },
-        { label: 'Other Party Information', value: reportData.otherPartyInformation },
-      ];
-      const otherPartyText = formatSectionText('OTHER PARTY INFORMATION', otherPartyFields);
-      if (otherPartyText) {
-        parts.push(otherPartyText);
-        parts.push('');
-      }
-
-      const witnessFields = [
-        { label: 'Witness Name', value: reportData.witnessName },
-        { label: 'Witness Contact', value: reportData.witnessContact },
-        { label: 'Witness Address', value: reportData.witnessAddress },
-        { label: 'Witness Statement', value: reportData.witnessStatement },
-      ];
-      const witnessText = formatSectionText('WITNESS INFORMATION', witnessFields);
-      if (witnessText) {
-        parts.push(witnessText);
-        parts.push('');
-      }
-
-      return parts.join('\n').trim();
+    generateTemplate: (personalInfo, reportData) => {
+      // Strictly keep the full copy clipboard to the Vehicle + Driver sentence only,
+      // never mixing Place & Time of Incident into the main full copy clipboard.
+      return formatVehicularAccidentText(personalInfo, reportData);
     },
   },
 

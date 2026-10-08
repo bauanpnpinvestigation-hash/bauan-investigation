@@ -6,7 +6,14 @@ import { CopySectionButton } from '../common/CopySectionButton';
 import { CopyReportButton } from '../common/CopyReportButton';
 import { StatusBadge } from '../common/StatusBadge';
 import { DynamicReportFields } from '../form/DynamicReportFields';
-import { formatPersonalInformationText, formatVehicularAccidentText, formatSectionText } from '../../utils/formatters';
+import {
+  formatPersonalInformationText,
+  formatVehicularAccidentText,
+  formatPlaceAndTimeText,
+  getIncidentPlaceValue,
+  getIncidentTimeValue,
+  formatSectionText,
+} from '../../utils/formatters';
 import { formatHumanDate, formatHumanDateTime } from '../../utils/dateUtils';
 import { 
   getGoogleDriveAccessToken, 
@@ -52,7 +59,9 @@ import {
   Download,
   FolderCheck,
   Camera,
-  ZoomIn
+  ZoomIn,
+  MapPin,
+  Clock
 } from 'lucide-react';
 
 interface AdminReportDetailProps {
@@ -196,6 +205,9 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
   const isVehicular = report.reportType === 'vehicular-incident';
   const personalInfoFormatted = formatPersonalInformationText(personalInfo);
   const vehicularAccidentFormatted = formatVehicularAccidentText(personalInfo, reportData);
+  const placeAndTimeFormatted = formatPlaceAndTimeText(reportData);
+  const incidentPlaceValue = getIncidentPlaceValue(reportData);
+  const incidentTimeValue = getIncidentTimeValue(reportData);
   const primaryFormattedEntry = isVehicular ? vehicularAccidentFormatted : personalInfoFormatted;
   const completeReportFormatted = reportConfig 
     ? reportConfig.generateTemplate(personalInfo, reportData, report.referenceNumber)
@@ -367,7 +379,7 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                 <FileText className="w-4 h-4 text-amber-400" />
                 <h3 className="text-xs sm:text-sm font-extrabold tracking-wider uppercase">
                   {isVehicular
-                    ? 'Official Vehicular Accident Blotter Format (Ready to Copy)'
+                    ? 'Official Vehicular Accident Blotter Format (Vehicle & Driver Only)'
                     : 'Official Personal Information Blotter Format (Ready to Copy)'}
                 </h3>
               </div>
@@ -383,6 +395,77 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
               </p>
             </div>
           </div>
+
+          {/* STANDALONE PLACE & TIME OF INCIDENT SECTION FOR VEHICULAR ACCIDENT */}
+          {isVehicular && (
+            <div className="bg-white rounded-xl border-2 border-amber-500 shadow-sm overflow-hidden">
+              <div className="px-5 py-3.5 bg-amber-900 text-white flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-amber-300" />
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-extrabold tracking-wider uppercase">
+                      Place & Time of Incident (Lugar at Oras ng Insidente)
+                    </h3>
+                    <p className="text-[11px] text-amber-200">
+                      Separate Copy Section (Not mixed with full vehicle/driver blotter copy)
+                    </p>
+                  </div>
+                </div>
+                <CopySectionButton
+                  sectionTitle="Place & Time of Incident"
+                  formattedText={placeAndTimeFormatted}
+                  className="border-amber-300"
+                />
+              </div>
+
+              <div className="p-5 space-y-4">
+                {/* Copy Both Together Box */}
+                <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl flex items-start justify-between gap-3">
+                  <div className="space-y-1 min-w-0">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-900 block">
+                      Copy Both (Place & Time Together):
+                    </span>
+                    <pre className="text-xs sm:text-sm font-mono font-semibold text-slate-900 whitespace-pre-wrap select-all">
+                      {placeAndTimeFormatted || '—'}
+                    </pre>
+                  </div>
+                  <CopyButton
+                    value={placeAndTimeFormatted}
+                    label="Both Place & Time of Incident"
+                  />
+                </div>
+
+                {/* Individual Single Entity Copy Rows */}
+                <div className="divide-y divide-slate-100 text-xs sm:text-sm border border-slate-200 rounded-xl px-4 bg-slate-50/50">
+                  <div className="py-3 flex items-center justify-between gap-4">
+                    <div className="w-3/4">
+                      <span className="text-slate-500 font-medium flex items-center gap-1.5 text-xs">
+                        <MapPin className="w-3.5 h-3.5 text-amber-700" />
+                        <span>1. Place of Incident (Lugar ng Insidente — Single Copy)</span>
+                      </span>
+                      <span className="font-bold text-slate-900 mt-0.5 block">
+                        {incidentPlaceValue || '—'}
+                      </span>
+                    </div>
+                    <CopyButton value={incidentPlaceValue} label="Place of Incident" />
+                  </div>
+
+                  <div className="py-3 flex items-center justify-between gap-4">
+                    <div className="w-3/4">
+                      <span className="text-slate-500 font-medium flex items-center gap-1.5 text-xs">
+                        <Clock className="w-3.5 h-3.5 text-amber-700" />
+                        <span>2. Time of Incident (Oras at Petsa ng Insidente — Single Copy)</span>
+                      </span>
+                      <span className="font-bold text-slate-900 mt-0.5 block">
+                        {incidentTimeValue || '—'}
+                      </span>
+                    </div>
+                    <CopyButton value={incidentTimeValue} label="Time of Incident" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* CLIENT SUBMITTED PERSONAL INFORMATION */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
@@ -406,38 +489,50 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
               <div className="p-5 bg-amber-50/40 border-b border-slate-200 divide-y divide-amber-200/60 text-xs sm:text-sm">
                 <div className="pb-2">
                   <span className="text-[11px] font-black uppercase tracking-wider text-amber-900">
-                    Vehicle Details (Impormasyon ng Sasakyan)
+                    Vehicle Details (Impormasyon ng Sasakyan — Single Entity Copy)
                   </span>
                 </div>
                 <div className="py-2.5 flex items-center justify-between gap-4">
                   <div className="w-2/3">
-                    <span className="text-slate-500 font-medium block text-xs">Vehicle Make & Model (Taták at Modelo)</span>
+                    <span className="text-slate-500 font-medium block text-xs">1. Vehicle Make / Brand (Tatak / Brand ng Sasakyan)</span>
                     <span className="font-bold text-slate-900">
-                      {reportData.vehicleMakeModel || [reportData.vehicleMake, reportData.vehicleModel].filter(Boolean).join(' ') || '—'}
+                      {reportData.vehicleMake || reportData.vehicleMakeModel || '—'}
                     </span>
                   </div>
                   <CopyButton
-                    value={reportData.vehicleMakeModel || [reportData.vehicleMake, reportData.vehicleModel].filter(Boolean).join(' ')}
-                    label="Vehicle Make & Model"
+                    value={reportData.vehicleMake || reportData.vehicleMakeModel}
+                    label="Vehicle Make / Brand"
                   />
                 </div>
                 <div className="py-2.5 flex items-center justify-between gap-4">
                   <div className="w-2/3">
-                    <span className="text-slate-500 font-medium block text-xs">Vehicle Year Model (Taon ng Sasakyan)</span>
+                    <span className="text-slate-500 font-medium block text-xs">2. Vehicle Model (Modelo ng Sasakyan)</span>
+                    <span className="font-bold text-slate-900">
+                      {reportData.vehicleModel || '—'}
+                    </span>
+                  </div>
+                  <CopyButton
+                    value={reportData.vehicleModel}
+                    label="Vehicle Model"
+                  />
+                </div>
+                <div className="py-2.5 flex items-center justify-between gap-4">
+                  <div className="w-2/3">
+                    <span className="text-slate-500 font-medium block text-xs">3. Vehicle Year Model (Taon ng Sasakyan)</span>
                     <span className="font-bold text-slate-900">{reportData.vehicleYear || '—'}</span>
                   </div>
                   <CopyButton value={reportData.vehicleYear} label="Vehicle Year" />
                 </div>
                 <div className="py-2.5 flex items-center justify-between gap-4">
                   <div className="w-2/3">
-                    <span className="text-slate-500 font-medium block text-xs">Vehicle Color (Kulay — "colored ...")</span>
+                    <span className="text-slate-500 font-medium block text-xs">4. Vehicle Color (Kulay — "colored ...")</span>
                     <span className="font-bold text-slate-900">{reportData.vehicleColor || '—'}</span>
                   </div>
                   <CopyButton value={reportData.vehicleColor} label="Vehicle Color" />
                 </div>
                 <div className="py-2.5 flex items-center justify-between gap-4">
                   <div className="w-2/3">
-                    <span className="text-slate-500 font-medium block text-xs">Plate Number (Numero ng Plaka — "bearing plate number ...")</span>
+                    <span className="text-slate-500 font-medium block text-xs">5. Plate Number (Numero ng Plaka — "bearing plate number ...")</span>
                     <span className="font-bold font-mono text-slate-900">{reportData.plateNumber || '—'}</span>
                   </div>
                   <CopyButton value={reportData.plateNumber} label="Plate Number" />

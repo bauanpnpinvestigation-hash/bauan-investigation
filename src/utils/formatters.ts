@@ -172,6 +172,43 @@ export function formatVehicularAccidentText(
 }
 
 /**
+ * Formats Place of Incident and Time of Incident into its own standalone copyable block
+ * (kept strictly separate from the full Vehicular Accident blotter paragraph).
+ */
+export function getIncidentPlaceValue(reportData: Record<string, any> = {}): string {
+  return String(reportData.placeOfIncident || reportData.location || '').trim();
+}
+
+export function getIncidentTimeValue(reportData: Record<string, any> = {}): string {
+  const rawTime = String(reportData.incidentTime || '').trim();
+  const rawDate = String(reportData.incidentDate || '').trim();
+  if (rawDate && rawTime && !rawTime.toLowerCase().includes(rawDate.toLowerCase())) {
+    const humanDate = formatHumanDate(rawDate);
+    if (humanDate && !rawTime.toLowerCase().includes(humanDate.toLowerCase())) {
+      return `${humanDate} at ${rawTime}`;
+    }
+  }
+  if (!rawTime && rawDate) {
+    return formatHumanDate(rawDate);
+  }
+  return rawTime;
+}
+
+export function formatPlaceAndTimeText(reportData: Record<string, any> = {}): string {
+  const place = getIncidentPlaceValue(reportData);
+  const time = getIncidentTimeValue(reportData);
+
+  const lines: string[] = [];
+  if (place) {
+    lines.push(`Place of Incident: ${place}`);
+  }
+  if (time) {
+    lines.push(`Time of Incident: ${time}`);
+  }
+  return lines.join('\n');
+}
+
+/**
  * Generic section formatter: transforms key-value pairs into clean plain text,
  * omitting empty or undefined values, and omitting labels as requested.
  */

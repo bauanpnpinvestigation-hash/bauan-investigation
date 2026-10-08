@@ -87,32 +87,32 @@ export const PublicFooter: React.FC<PublicFooterProps> = ({ onNavigateToFAQ }) =
           </div>
 
           <div className="space-y-3">
-            {/* Telephone Number */}
+            {/* Mobile Hotline 1 */}
             <a 
-              href="tel:0437271253" 
+              href="tel:09932314833" 
               className="group block p-3 bg-slate-900 hover:bg-slate-900/80 border border-slate-800 hover:border-blue-800 rounded-xl transition-all shadow-xs"
             >
               <div className="text-[10px] uppercase font-bold text-slate-400 group-hover:text-blue-400 tracking-wider">
-                Bauan MPS Telephone Number
+                PNP Mobile Hotline 1 (Cellphone)
               </div>
               <div className="text-sm font-black text-white group-hover:text-amber-400 transition-colors flex items-center justify-between mt-0.5">
-                <span>(043) 727-1253</span>
+                <span>0993 231 4833</span>
                 <span className="text-[11px] text-blue-400 group-hover:text-amber-400 font-semibold px-2 py-0.5 bg-blue-950 rounded border border-blue-900">
-                  Call Line
+                  Call/SMS
                 </span>
               </div>
             </a>
 
-            {/* Mobile Hotlines */}
+            {/* Mobile Hotline 2 */}
             <a 
-              href="tel:+639985985664" 
+              href="tel:09164620308" 
               className="group block p-3 bg-slate-900 hover:bg-slate-900/80 border border-slate-800 hover:border-blue-800 rounded-xl transition-all shadow-xs"
             >
               <div className="text-[10px] uppercase font-bold text-slate-400 group-hover:text-blue-400 tracking-wider">
-                PNP Mobile Hotline (Smart)
+                PNP Mobile Hotline 2 (Cellphone)
               </div>
               <div className="text-sm font-black text-white group-hover:text-amber-400 transition-colors flex items-center justify-between mt-0.5">
-                <span>+63 998 598 5664</span>
+                <span>0916 462 0308</span>
                 <span className="text-[11px] text-blue-400 group-hover:text-amber-400 font-semibold px-2 py-0.5 bg-blue-950 rounded border border-blue-900">
                   Call/SMS
                 </span>
