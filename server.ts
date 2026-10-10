@@ -95,6 +95,7 @@ async function getReportsList() {
         loaded.push({
           ...d,
           id: doc.id || d.id,
+          mergedParties: ensureArray(d.mergedParties),
           attachments: ensureArray(d.attachments),
           adminNotes: ensureArray(d.adminNotes),
           auditLogs: ensureArray(d.auditLogs),
@@ -378,8 +379,13 @@ app.patch('/api/admin/reports/:id', adminOnlyMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Record not found.' });
     }
 
-    const { reportData } = req.body;
-    target.reportData = reportData || {};
+    const { reportData, personalInformation, mergedParties, attachments, reportType, stationOffice } = req.body;
+    if (reportData !== undefined) target.reportData = reportData || {};
+    if (personalInformation !== undefined) target.personalInformation = personalInformation || {};
+    if (mergedParties !== undefined) target.mergedParties = Array.isArray(mergedParties) ? mergedParties : [];
+    if (attachments !== undefined) target.attachments = Array.isArray(attachments) ? attachments : [];
+    if (reportType !== undefined) target.reportType = reportType;
+    if (stationOffice !== undefined) target.stationOffice = stationOffice;
     target.updatedAt = new Date().toISOString();
     
     // Add server-generated audit log

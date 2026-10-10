@@ -93,6 +93,20 @@ export interface AttachmentItem {
   publicId?: string;
   sourceType?: 'upload' | 'live_capture';
   uploadedAt: string;
+  partyId?: string;
+  partyLabel?: string;
+  partyReferenceNumber?: string;
+}
+
+export interface MergedPartyRecord {
+  id: string;
+  referenceNumber: string;
+  reportType: ReportTypeId;
+  partyLabel: string;
+  createdAt: string;
+  mergedAt: string;
+  personalInformation: PersonalInformation;
+  reportData: Record<string, any>;
 }
 
 export interface AdminNote {
@@ -133,6 +147,10 @@ export interface ReportSubmission {
   archivedAt?: string | null;
   personalInformation: PersonalInformation;
   reportData: Record<string, any>;
+  mergedParties?: MergedPartyRecord[];
+  isMergedFile?: boolean;
+  sourceReportIds?: string[];
+  sourceReferenceNumbers?: string[];
   attachments: AttachmentItem[];
   adminNotes: AdminNote[];
   auditLogs: AuditLogEntry[];

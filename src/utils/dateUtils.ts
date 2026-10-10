@@ -30,6 +30,8 @@ export function calculateAge(birthdayStr: string, referenceDate: Date = new Date
   return age >= 0 ? age : null;
 }
 
+export const calculateAgeFromBirthday = calculateAge;
+
 /**
  * Format ISO date string or YYYY-MM-DD into readable English format: "January 5, 1995"
  */

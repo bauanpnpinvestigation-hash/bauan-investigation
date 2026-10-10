@@ -8,7 +8,13 @@ import { QRCodeModal } from './components/common/QRCodeModal';
 import { BackgroundWatermark } from './components/common/BackgroundWatermark';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { useToast } from './context/ToastContext';
-import { ReportSubmission, ReportStatus } from './types/reports';
+import {
+  ReportSubmission,
+  ReportStatus,
+  PersonalInformation,
+  MergedPartyRecord,
+  AttachmentItem,
+} from './types/reports';
 import { 
   auth, 
   signOutAdmin, 
@@ -20,6 +26,12 @@ import {
   updateReportDataInFirestore,
   addAdminNoteInFirestore,
   eraseAllReportsFromFirestore,
+  mergeReportsIntoSingleFileInFirestore,
+  preserveOriginalFilesForLegacyMergesInFirestore,
+  updateCompleteReportRecordInFirestore,
+  addAttachmentsToReportInFirestore,
+  unmergePartyToStandaloneReportInFirestore,
+  deleteAdminNoteInFirestore,
   normalizeFirestoreArray,
   AUTHORIZED_ADMIN_EMAIL
 } from './services/firebase';
@@ -100,6 +112,7 @@ export default function App() {
           deduplicateReports(
             rawReports.map((r: any) => ({
               ...r,
+              mergedParties: normalizeFirestoreArray(r.mergedParties),
               attachments: normalizeFirestoreArray(r.attachments),
               adminNotes: normalizeFirestoreArray(r.adminNotes),
               auditLogs: normalizeFirestoreArray(r.auditLogs),
@@ -129,6 +142,7 @@ export default function App() {
       const unsubscribe = subscribeToReports(
         (liveReports) => {
           setReports(deduplicateReports(liveReports));
+          preserveOriginalFilesForLegacyMergesInFirestore(liveReports);
         },
         (err) => {
           console.warn('[Direct Firestore Sync failed, falling back to secure API]:', err);
@@ -348,6 +362,110 @@ export default function App() {
     }
   };
 
+  // Merge 2 or more submitted client documents into 1 single combined file while keeping ALL original files intact
+  const handleMergeReports = async (
+    primaryReportId: string,
+    secondaryReportIds: string[],
+    deleteMergedOriginals: boolean = false
+  ) => {
+    try {
+      const merged = await mergeReportsIntoSingleFileInFirestore(
+        primaryReportId,
+        secondaryReportIds,
+        deleteMergedOriginals,
+        adminEmail
+      );
+      if (merged) {
+        setReports((prev) => deduplicateReports([merged, ...prev]));
+        toast.success(
+          `Created Merged File #${merged.referenceNumber} — All original client files remain intact!`,
+          'Merged File Created'
+        );
+        setSelectedReportId(merged.id);
+      }
+    } catch (err: any) {
+      console.error('[Merge Reports Error]:', err);
+      toast.error(err.message || 'Failed to merge records');
+    }
+  };
+
+  // Full CRUD update for a single or combined report record
+  const handleUpdateCompleteReport = async (
+    reportId: string,
+    updates: {
+      personalInformation?: PersonalInformation;
+      reportData?: Record<string, any>;
+      mergedParties?: MergedPartyRecord[];
+      attachments?: AttachmentItem[];
+      reportType?: ReportSubmission['reportType'];
+      stationOffice?: string;
+    },
+    auditDetails?: string
+  ) => {
+    try {
+      await updateCompleteReportRecordInFirestore(reportId, updates, adminEmail, auditDetails);
+      toast.success('Record changes saved to database');
+    } catch (err: any) {
+      console.warn('[Direct Firestore Full CRUD Update failed, trying API fallback]:', err);
+      try {
+        const resp = await fetchWithAuth(`/api/admin/reports/${reportId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(updates),
+        });
+        if (!resp.ok) {
+          throw new Error('Server-side CRUD update failed validation.');
+        }
+        toast.success('Record changes saved to database');
+        loadReports();
+      } catch (fallbackErr: any) {
+        console.error('[Admin API] Failed to save CRUD updates:', fallbackErr);
+        toast.error(fallbackErr.message || 'Failed to save record changes');
+      }
+    }
+  };
+
+  // Upload new photos / attachments directly into an existing single or combined file
+  const handleUploadAttachmentsToReport = async (
+    reportId: string,
+    newAttachments: AttachmentItem[]
+  ) => {
+    try {
+      await addAttachmentsToReportInFirestore(reportId, newAttachments, adminEmail);
+      toast.success(`Uploaded ${newAttachments.length} photo(s) to case file`);
+    } catch (err: any) {
+      console.error('[Admin Photo Upload Error]:', err);
+      toast.error(err.message || 'Failed to save uploaded photo to case file');
+    }
+  };
+
+  // Unmerge / Split a merged party back into its own standalone record
+  const handleUnmergeParty = async (primaryReportId: string, partyId: string) => {
+    try {
+      const restored = await unmergePartyToStandaloneReportInFirestore(
+        primaryReportId,
+        partyId,
+        adminEmail
+      );
+      if (restored) {
+        toast.info(`Split party #${restored.referenceNumber} back into a standalone record`);
+      }
+    } catch (err: any) {
+      console.error('[Unmerge Party Error]:', err);
+      toast.error(err.message || 'Failed to unmerge party');
+    }
+  };
+
+  // Delete an internal admin note
+  const handleDeleteAdminNote = async (reportId: string, noteId: string) => {
+    try {
+      await deleteAdminNoteInFirestore(reportId, noteId, adminEmail);
+      toast.info('Internal note removed');
+    } catch (err: any) {
+      console.error('[Delete Note Error]:', err);
+      toast.error(err.message || 'Failed to delete internal note');
+    }
+  };
+
   // Logout handler
   const handleLogout = async () => {
     await signOutAdmin();
@@ -399,10 +517,17 @@ export default function App() {
           <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <AdminReportDetail
               report={selectedReport}
+              allReports={reports}
               onBack={() => setSelectedReportId(null)}
+              onSelectReport={(id) => setSelectedReportId(id)}
               onUpdateStatus={handleUpdateStatus}
               onUpdateReportData={handleUpdateReportData}
+              onUpdateCompleteReport={handleUpdateCompleteReport}
+              onMergeReports={handleMergeReports}
+              onUploadAttachments={handleUploadAttachmentsToReport}
+              onUnmergeParty={handleUnmergeParty}
               onAddNote={handleAddNote}
+              onDeleteNote={handleDeleteAdminNote}
               onDeleteReport={handleDeleteReport}
               onDeleteAttachment={handleDeleteAttachment}
               currentAdminEmail={adminEmail}
@@ -423,6 +548,7 @@ export default function App() {
         <AdminDashboard
           reports={reports}
           onViewReport={(id) => setSelectedReportId(id)}
+          onMergeReports={handleMergeReports}
           onLogout={handleLogout}
           onOpenQRCode={() => setIsQRModalOpen(true)}
           currentAdminEmail={adminEmail}
