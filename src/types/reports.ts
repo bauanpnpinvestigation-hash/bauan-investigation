@@ -146,12 +146,239 @@ export interface AuditLogEntry {
   details?: string;
 }
 
-export type MergeInvestigatorName = 'Kim Edsel Saycon' | 'Bienne Care';
+export type InvestigatorTeamId = 'TEAM_1' | 'TEAM_2';
 
-export const MERGE_INVESTIGATOR_OPTIONS: MergeInvestigatorName[] = [
-  'Kim Edsel Saycon',
-  'Bienne Care',
+export type MergeInvestigatorName =
+  | 'Team 1 — Saycon & Care (Kim Edsel Saycon & Bienne Care)'
+  | 'Team 1 (Saycon & Care) — Kim Edsel Saycon'
+  | 'Team 1 (Saycon & Care) — Bienne Care'
+  | 'Team 2 — Alzate & Serwelas'
+  | 'Team 2 (Alzate & Serwelas) — Alzate'
+  | 'Team 2 (Alzate & Serwelas) — Serwelas';
+
+export interface InvestigatorOptionItem {
+  value: MergeInvestigatorName;
+  shortName: string;
+  roleLabel: string;
+  teamId: InvestigatorTeamId;
+  teamName: string;
+}
+
+export interface InvestigatorTeamConfig {
+  id: InvestigatorTeamId;
+  teamNumber: 1 | 2;
+  teamTitle: string;
+  teamPairName: string;
+  teamSubtitle: string;
+  defaultSelection: MergeInvestigatorName;
+  investigators: InvestigatorOptionItem[];
+}
+
+export const INVESTIGATOR_TEAMS: InvestigatorTeamConfig[] = [
+  {
+    id: 'TEAM_1',
+    teamNumber: 1,
+    teamTitle: 'Team 1 — Saycon & Care',
+    teamPairName: 'Saycon & Care',
+    teamSubtitle: 'Kim Edsel Saycon & Bienne Care',
+    defaultSelection: 'Team 1 — Saycon & Care (Kim Edsel Saycon & Bienne Care)',
+    investigators: [
+      {
+        value: 'Team 1 — Saycon & Care (Kim Edsel Saycon & Bienne Care)',
+        shortName: 'Saycon & Care (Both Team 1)',
+        roleLabel: 'Full Team 1 Investigators',
+        teamId: 'TEAM_1',
+        teamName: 'Team 1 — Saycon & Care',
+      },
+      {
+        value: 'Team 1 (Saycon & Care) — Kim Edsel Saycon',
+        shortName: 'Kim Edsel Saycon',
+        roleLabel: 'Team 1 Investigator',
+        teamId: 'TEAM_1',
+        teamName: 'Team 1 — Saycon & Care',
+      },
+      {
+        value: 'Team 1 (Saycon & Care) — Bienne Care',
+        shortName: 'Bienne Care',
+        roleLabel: 'Team 1 Investigator',
+        teamId: 'TEAM_1',
+        teamName: 'Team 1 — Saycon & Care',
+      },
+    ],
+  },
+  {
+    id: 'TEAM_2',
+    teamNumber: 2,
+    teamTitle: 'Team 2 — Alzate & Serwelas',
+    teamPairName: 'Alzate & Serwelas',
+    teamSubtitle: 'Investigators Alzate & Serwelas',
+    defaultSelection: 'Team 2 — Alzate & Serwelas',
+    investigators: [
+      {
+        value: 'Team 2 — Alzate & Serwelas',
+        shortName: 'Alzate & Serwelas (Both Team 2)',
+        roleLabel: 'Full Team 2 Investigators',
+        teamId: 'TEAM_2',
+        teamName: 'Team 2 — Alzate & Serwelas',
+      },
+      {
+        value: 'Team 2 (Alzate & Serwelas) — Alzate',
+        shortName: 'Alzate',
+        roleLabel: 'Team 2 Investigator',
+        teamId: 'TEAM_2',
+        teamName: 'Team 2 — Alzate & Serwelas',
+      },
+      {
+        value: 'Team 2 (Alzate & Serwelas) — Serwelas',
+        shortName: 'Serwelas',
+        roleLabel: 'Team 2 Investigator',
+        teamId: 'TEAM_2',
+        teamName: 'Team 2 — Alzate & Serwelas',
+      },
+    ],
+  },
 ];
+
+export const MERGE_INVESTIGATOR_OPTIONS: MergeInvestigatorName[] = INVESTIGATOR_TEAMS.flatMap(
+  (t) => t.investigators.map((inv) => inv.value)
+);
+
+/**
+ * Validates and normalizes an investigator / team string to an official Team 1 (Saycon & Care)
+ * or Team 2 (Alzate & Serwelas) investigator selection.
+ */
+export function validateAndNormalizeInvestigator(
+  rawInput?: string | null
+): {
+  isValid: boolean;
+  teamId: InvestigatorTeamId;
+  teamName: string;
+  normalizedValue: MergeInvestigatorName;
+} {
+  const raw = String(rawInput || '').trim();
+  const lower = raw.toLowerCase();
+
+  // Check exact match first
+  for (const team of INVESTIGATOR_TEAMS) {
+    for (const inv of team.investigators) {
+      if (inv.value.toLowerCase() === lower) {
+        return {
+          isValid: true,
+          teamId: team.id,
+          teamName: team.teamTitle,
+          normalizedValue: inv.value,
+        };
+      }
+    }
+  }
+
+  // Check Team 2 keywords (Alzate / Serwelas / Team 2)
+  if (lower.includes('alzate') && lower.includes('serwelas')) {
+    if (lower.endsWith('— alzate') || lower.endsWith('- alzate')) {
+      return {
+        isValid: true,
+        teamId: 'TEAM_2',
+        teamName: 'Team 2 — Alzate & Serwelas',
+        normalizedValue: 'Team 2 (Alzate & Serwelas) — Alzate',
+      };
+    }
+    if (lower.endsWith('— serwelas') || lower.endsWith('- serwelas')) {
+      return {
+        isValid: true,
+        teamId: 'TEAM_2',
+        teamName: 'Team 2 — Alzate & Serwelas',
+        normalizedValue: 'Team 2 (Alzate & Serwelas) — Serwelas',
+      };
+    }
+    return {
+      isValid: true,
+      teamId: 'TEAM_2',
+      teamName: 'Team 2 — Alzate & Serwelas',
+      normalizedValue: 'Team 2 — Alzate & Serwelas',
+    };
+  }
+  if (lower.includes('alzate')) {
+    return {
+      isValid: true,
+      teamId: 'TEAM_2',
+      teamName: 'Team 2 — Alzate & Serwelas',
+      normalizedValue: 'Team 2 (Alzate & Serwelas) — Alzate',
+    };
+  }
+  if (lower.includes('serwelas')) {
+    return {
+      isValid: true,
+      teamId: 'TEAM_2',
+      teamName: 'Team 2 — Alzate & Serwelas',
+      normalizedValue: 'Team 2 (Alzate & Serwelas) — Serwelas',
+    };
+  }
+  if (lower.includes('team 2') || lower === 'team_2') {
+    return {
+      isValid: true,
+      teamId: 'TEAM_2',
+      teamName: 'Team 2 — Alzate & Serwelas',
+      normalizedValue: 'Team 2 — Alzate & Serwelas',
+    };
+  }
+
+  // Check Team 1 keywords (Saycon / Care / Team 1)
+  if ((lower.includes('saycon') || lower.includes('sayco')) && lower.includes('care')) {
+    if (lower.endsWith('kim edsel saycon')) {
+      return {
+        isValid: true,
+        teamId: 'TEAM_1',
+        teamName: 'Team 1 — Saycon & Care',
+        normalizedValue: 'Team 1 (Saycon & Care) — Kim Edsel Saycon',
+      };
+    }
+    if (lower.endsWith('bienne care')) {
+      return {
+        isValid: true,
+        teamId: 'TEAM_1',
+        teamName: 'Team 1 — Saycon & Care',
+        normalizedValue: 'Team 1 (Saycon & Care) — Bienne Care',
+      };
+    }
+    return {
+      isValid: true,
+      teamId: 'TEAM_1',
+      teamName: 'Team 1 — Saycon & Care',
+      normalizedValue: 'Team 1 — Saycon & Care (Kim Edsel Saycon & Bienne Care)',
+    };
+  }
+  if (lower.includes('bienne') || lower.includes('care')) {
+    return {
+      isValid: true,
+      teamId: 'TEAM_1',
+      teamName: 'Team 1 — Saycon & Care',
+      normalizedValue: 'Team 1 (Saycon & Care) — Bienne Care',
+    };
+  }
+  if (lower.includes('saycon') || lower.includes('sayco') || lower.includes('kim edsel')) {
+    return {
+      isValid: true,
+      teamId: 'TEAM_1',
+      teamName: 'Team 1 — Saycon & Care',
+      normalizedValue: 'Team 1 (Saycon & Care) — Kim Edsel Saycon',
+    };
+  }
+  if (lower.includes('team 1') || lower === 'team_1') {
+    return {
+      isValid: true,
+      teamId: 'TEAM_1',
+      teamName: 'Team 1 — Saycon & Care',
+      normalizedValue: 'Team 1 — Saycon & Care (Kim Edsel Saycon & Bienne Care)',
+    };
+  }
+
+  return {
+    isValid: false,
+    teamId: 'TEAM_1',
+    teamName: 'Team 1 — Saycon & Care',
+    normalizedValue: 'Team 1 — Saycon & Care (Kim Edsel Saycon & Bienne Care)',
+  };
+}
 
 export interface ReportSubmission {
   id: string;
@@ -167,6 +394,7 @@ export interface ReportSubmission {
   mergedParties?: MergedPartyRecord[];
   isMergedFile?: boolean;
   mergedFileTitle?: string;
+  mergedByTeam?: InvestigatorTeamId;
   mergedByInvestigator?: string;
   sourceReportIds?: string[];
   sourceReferenceNumbers?: string[];

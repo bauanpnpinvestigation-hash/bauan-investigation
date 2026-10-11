@@ -68,10 +68,14 @@
           "type": "string",
           "description": "Police department or station unit"
         },
+        "mergedByTeam": {
+          "type": "string",
+          "description": "Investigator Team (TEAM_1: Saycon & Care or TEAM_2: Alzate & Serwelas)",
+          "enum": ["TEAM_1", "TEAM_2"]
+        },
         "mergedByInvestigator": {
           "type": "string",
-          "description": "Investigator who merged the case file",
-          "enum": ["Kim Edsel Saycon", "Bienne Care"]
+          "description": "Validated Investigator and Team who merged the case file"
         }
       },
       "required": ["referenceNumber", "reportType", "status", "personalInformation"]

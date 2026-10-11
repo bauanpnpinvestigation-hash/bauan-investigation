@@ -3,8 +3,9 @@ import {
   ReportSubmission,
   ReportStatus,
   ReportTypeId,
-  MERGE_INVESTIGATOR_OPTIONS,
+  INVESTIGATOR_TEAMS,
   MergeInvestigatorName,
+  validateAndNormalizeInvestigator,
 } from '../../types/reports';
 import { REPORT_TYPES } from '../../config/reportTypes';
 import { StatusBadge } from '../common/StatusBadge';
@@ -97,7 +98,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [showMergeModal, setShowMergeModal] = useState<boolean>(false);
   const [primaryMergeId, setPrimaryMergeId] = useState<string>('');
   const [selectedMergeInvestigator, setSelectedMergeInvestigator] =
-    useState<MergeInvestigatorName>('Kim Edsel Saycon');
+    useState<MergeInvestigatorName | ''>('');
+  const [mergeInvestigatorError, setMergeInvestigatorError] = useState<string | null>(null);
   const [deleteOriginalsOnMerge, setDeleteOriginalsOnMerge] = useState<boolean>(false);
   const [isMerging, setIsMerging] = useState<boolean>(false);
 
@@ -116,6 +118,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleConfirmDashboardMerge = async () => {
     if (!onMergeReports || selectedForMerge.length < 2) return;
+    const validation = validateAndNormalizeInvestigator(selectedMergeInvestigator);
+    if (!selectedMergeInvestigator || !validation.isValid) {
+      setMergeInvestigatorError(
+        'Validation Required: Please choose Team 1 (Saycon & Care) or Team 2 (Alzate & Serwelas) with their investigator name before merging.'
+      );
+      return;
+    }
+    setMergeInvestigatorError(null);
+
     const targetPrimary = primaryMergeId && selectedForMerge.includes(primaryMergeId)
       ? primaryMergeId
       : selectedForMerge[0];
@@ -128,11 +139,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         targetPrimary,
         secondaryIds,
         deleteOriginalsOnMerge,
-        selectedMergeInvestigator
+        validation.normalizedValue
       );
       setShowMergeModal(false);
       setSelectedForMerge([]);
       setPrimaryMergeId('');
+      setSelectedMergeInvestigator('');
+      setMergeInvestigatorError(null);
     } finally {
       setIsMerging(false);
     }
@@ -1448,44 +1461,125 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Investigator Selection Section (Only 2 Options: Kim Edsel Saycon or Bienne Care) */}
-              <div>
-                <label className="block font-extrabold text-slate-900 mb-2">
-                  Choose Investigator Who Did This Merge (2 Options Only):
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {MERGE_INVESTIGATOR_OPTIONS.map((invName) => {
-                    const isSelectedInv = selectedMergeInvestigator === invName;
+              {/* Investigator Team & Name Validation Section (Team 1: Saycon & Care | Team 2: Alzate & Serwelas) */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <label className="block font-extrabold text-slate-900">
+                    Choose Investigator Team & Name (Required Validation):
+                  </label>
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-100 text-indigo-900">
+                    Team 1 or Team 2 Required
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {INVESTIGATOR_TEAMS.map((team) => {
+                    const currentVal = selectedMergeInvestigator
+                      ? validateAndNormalizeInvestigator(selectedMergeInvestigator)
+                      : null;
+                    const isTeamSelected =
+                      Boolean(selectedMergeInvestigator) && currentVal?.teamId === team.id;
+
                     return (
-                      <label
-                        key={invName}
-                        className={`flex items-center gap-2.5 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                          isSelectedInv
-                            ? 'bg-indigo-50 border-indigo-700 ring-2 ring-indigo-500/20 text-indigo-950'
-                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                      <div
+                        key={team.id}
+                        onClick={() => {
+                          if (!isTeamSelected) {
+                            setSelectedMergeInvestigator(team.defaultSelection);
+                            setMergeInvestigatorError(null);
+                          }
+                        }}
+                        className={`rounded-xl border-2 p-3 transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                          isTeamSelected
+                            ? 'bg-indigo-50/90 border-indigo-700 ring-2 ring-indigo-500/20 shadow-xs'
+                            : 'bg-slate-50 border-slate-200 hover:border-indigo-300 hover:bg-slate-100/70'
                         }`}
                       >
-                        <input
-                          type="radio"
-                          name="mergeInvestigatorDashboard"
-                          value={invName}
-                          checked={isSelectedInv}
-                          onChange={() => setSelectedMergeInvestigator(invName)}
-                          className="w-4 h-4 text-indigo-900 focus:ring-indigo-900 cursor-pointer"
-                        />
-                        <div className="min-w-0">
-                          <span className="font-black text-xs sm:text-sm block">
-                            {invName}
-                          </span>
-                          <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1">
-                            <Shield className="w-3 h-3" />
-                            <span>Case Investigator</span>
-                          </span>
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                                isTeamSelected
+                                  ? 'bg-indigo-900 text-amber-300'
+                                  : 'bg-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <Shield className="w-3 h-3" />
+                              <span>Team {team.teamNumber}</span>
+                            </span>
+                            <h4 className="font-black text-xs sm:text-sm text-slate-900 mt-1">
+                              {team.teamPairName}
+                            </h4>
+                            <p className="text-[11px] font-semibold text-slate-600">
+                              {team.teamSubtitle}
+                            </p>
+                          </div>
+                          <input
+                            type="radio"
+                            name="mergeInvestigatorTeamDashboard"
+                            checked={isTeamSelected}
+                            onChange={() => {
+                              setSelectedMergeInvestigator(team.defaultSelection);
+                              setMergeInvestigatorError(null);
+                            }}
+                            className="w-4 h-4 text-indigo-900 focus:ring-indigo-900 cursor-pointer mt-1"
+                          />
                         </div>
-                      </label>
+
+                        <div
+                          className="space-y-1.5 pt-2 border-t border-slate-200/80"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">
+                            Select Investigator in Team {team.teamNumber}:
+                          </span>
+                          {team.investigators.map((inv) => {
+                            const isInvSelected = selectedMergeInvestigator === inv.value;
+                            return (
+                              <label
+                                key={inv.value}
+                                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                                  isInvSelected
+                                    ? 'bg-indigo-900 text-white border-indigo-950 font-black shadow-2xs'
+                                    : 'bg-white hover:bg-indigo-50 text-slate-800 border-slate-200 font-bold'
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="mergeInvestigatorSpecificDashboard"
+                                  value={inv.value}
+                                  checked={isInvSelected}
+                                  onChange={() => {
+                                    setSelectedMergeInvestigator(inv.value);
+                                    setMergeInvestigatorError(null);
+                                  }}
+                                  className="w-3.5 h-3.5 accent-amber-400 cursor-pointer"
+                                />
+                                <span className="truncate">{inv.shortName}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
+
+                {mergeInvestigatorError && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-300 rounded-xl flex items-center gap-2 text-rose-800 font-bold text-xs animate-fadeIn">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{mergeInvestigatorError}</span>
+                  </div>
+                )}
+
+                {selectedMergeInvestigator && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between gap-2 text-emerald-950 text-xs font-extrabold">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Validated Investigator Team: {selectedMergeInvestigator}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Auto-Generated Merged File Name Preview */}
