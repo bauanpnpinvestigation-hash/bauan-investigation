@@ -81,7 +81,9 @@ export function getDocumentCategoryLabel(category?: DocumentCategoryType | strin
     case 'VALID_ID':
       return 'Valid ID / Driver License';
     case 'SCENE_PHOTO':
-      return 'Vehicle / Incident Photo';
+      return 'Vehicle / Incident Scene Photo';
+    case 'EVIDENCE':
+      return 'Case Evidence File / Photo';
     case 'OTHER':
       return 'Supporting Document';
     default:

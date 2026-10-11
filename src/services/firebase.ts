@@ -400,7 +400,7 @@ async function compressBase64DataUrl(
  */
 export async function optimizeAttachmentsForFirestoreBudget(
   rawAttachments: AttachmentItem[],
-  maxTotalBytesBudget: number = 620000
+  maxTotalBytesBudget: number = 350000
 ): Promise<AttachmentItem[]> {
   const sanitized = normalizeFirestoreArray<AttachmentItem>(rawAttachments).map(
     sanitizeAttachmentForFirestore
@@ -412,20 +412,20 @@ export async function optimizeAttachmentsForFirestoreBudget(
 
   // Target per-image max base64 string length so all images combined stay within budget
   const perImageMaxChars = Math.max(
-    28000,
-    Math.min(85000, Math.floor(maxTotalBytesBudget / Math.max(1, dataUrlCount)))
+    18000,
+    Math.min(45000, Math.floor(maxTotalBytesBudget / Math.max(1, dataUrlCount)))
   );
 
   const pass1: AttachmentItem[] = [];
   for (const att of sanitized) {
     const attUrl = att.url || '';
     if (attUrl.startsWith('data:image/') && attUrl.length > perImageMaxChars) {
-      let compressedUrl = await compressBase64DataUrl(attUrl, 860, 0.58);
+      let compressedUrl = await compressBase64DataUrl(attUrl, 640, 0.48);
       if (compressedUrl.length > perImageMaxChars) {
-        compressedUrl = await compressBase64DataUrl(compressedUrl, 640, 0.48);
+        compressedUrl = await compressBase64DataUrl(compressedUrl, 480, 0.38);
       }
       if (compressedUrl.length > perImageMaxChars) {
-        compressedUrl = await compressBase64DataUrl(compressedUrl, 480, 0.4);
+        compressedUrl = await compressBase64DataUrl(compressedUrl, 360, 0.3);
       }
       pass1.push({
         ...att,
@@ -434,7 +434,10 @@ export async function optimizeAttachmentsForFirestoreBudget(
         size: Math.round((compressedUrl.length * 3) / 4),
       });
     } else {
-      pass1.push(att);
+      pass1.push({
+        ...att,
+        previewUrl: att.previewUrl === att.url ? '' : att.previewUrl,
+      });
     }
   }
 
@@ -448,8 +451,8 @@ export async function optimizeAttachmentsForFirestoreBudget(
   const pass2: AttachmentItem[] = [];
   for (const att of pass1) {
     const attUrl = att.url || '';
-    if (attUrl.startsWith('data:image/') && attUrl.length > 25000) {
-      const aggressiveUrl = await compressBase64DataUrl(attUrl, 420, 0.36);
+    if (attUrl.startsWith('data:image/') && attUrl.length > 18000) {
+      const aggressiveUrl = await compressBase64DataUrl(attUrl, 320, 0.28);
       pass2.push({
         ...att,
         url: aggressiveUrl,

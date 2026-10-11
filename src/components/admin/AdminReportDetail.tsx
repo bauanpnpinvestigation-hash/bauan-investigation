@@ -232,7 +232,7 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
   const [selectedDocumentCategory, setSelectedDocumentCategory] =
     useState<DocumentCategoryType>('VALID_ID');
   const [activeAttachmentFilter, setActiveAttachmentFilter] = useState<
-    'ALL' | 'OR' | 'CR' | 'VALID_ID' | 'SCENE_PHOTO'
+    'ALL' | 'OR' | 'CR' | 'VALID_ID' | 'SCENE_PHOTO' | 'EVIDENCE'
   >('ALL');
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -1204,7 +1204,7 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
 
               <div>
                 <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-1.5">
-                  2. Document Category (OR / CR / Valid ID / Photo)
+                  2. Document Category (OR / CR / Evidence / ID / Photo)
                 </label>
                 <select
                   value={selectedDocumentCategory}
@@ -1215,6 +1215,7 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                 >
                   <option value="OR">Official Receipt (OR)</option>
                   <option value="CR">Certificate of Registration (CR)</option>
+                  <option value="EVIDENCE">Case Evidence File / Photo</option>
                   <option value="VALID_ID">Valid ID / Driver&apos;s License</option>
                   <option value="SCENE_PHOTO">Vehicle / Incident Scene Photo</option>
                 </select>
@@ -2711,6 +2712,17 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    setSelectedDocumentCategory('EVIDENCE');
+                    setShowPhotoUploadPanel(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black transition-colors cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Upload Evidence</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     setSelectedDocumentCategory('VALID_ID');
                     setShowPhotoUploadPanel((prev) => !prev);
                   }}
@@ -2723,7 +2735,7 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Filter Tabs by Document Category (ALL / OR / CR / VALID_ID / SCENE_PHOTO) */}
+              {/* Filter Tabs by Document Category (ALL / OR / CR / EVIDENCE / VALID_ID / SCENE_PHOTO) */}
               {safeAttachments.length > 0 && (
                 <div className="flex items-center gap-1.5 flex-wrap bg-slate-100 p-1.5 rounded-xl border border-slate-200">
                   {[
@@ -2741,6 +2753,12 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                       })`,
                     },
                     {
+                      id: 'EVIDENCE',
+                      label: `Case Evidence (${
+                        safeAttachments.filter((a) => a.documentCategory === 'EVIDENCE').length
+                      })`,
+                    },
+                    {
                       id: 'VALID_ID',
                       label: `Valid ID / License (${
                         safeAttachments.filter(
@@ -2750,7 +2768,7 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                     },
                     {
                       id: 'SCENE_PHOTO',
-                      label: `Scene / Vehicle Photos (${
+                      label: `Scene Photos (${
                         safeAttachments.filter((a) => a.documentCategory === 'SCENE_PHOTO').length
                       })`,
                     },

@@ -88,6 +88,7 @@ export type DocumentCategoryType =
   | 'CR'
   | 'OR_CR'
   | 'SCENE_PHOTO'
+  | 'EVIDENCE'
   | 'OTHER';
 
 export interface AttachmentItem {
