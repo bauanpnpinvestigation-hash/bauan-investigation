@@ -366,19 +366,21 @@ export default function App() {
   const handleMergeReports = async (
     primaryReportId: string,
     secondaryReportIds: string[],
-    deleteMergedOriginals: boolean = false
+    deleteMergedOriginals: boolean = false,
+    mergedByInvestigator: string = 'Kim Edsel Saycon'
   ) => {
     try {
       const merged = await mergeReportsIntoSingleFileInFirestore(
         primaryReportId,
         secondaryReportIds,
         deleteMergedOriginals,
-        adminEmail
+        adminEmail,
+        mergedByInvestigator
       );
       if (merged) {
         setReports((prev) => deduplicateReports([merged, ...prev]));
         toast.success(
-          `Created Merged File #${merged.referenceNumber} — All original client files remain intact!`,
+          `Created Merged File #${merged.referenceNumber} (Investigator: ${merged.mergedByInvestigator || mergedByInvestigator}) — All original client files remain intact!`,
           'Merged File Created'
         );
         setSelectedReportId(merged.id);
@@ -399,6 +401,7 @@ export default function App() {
       attachments?: AttachmentItem[];
       reportType?: ReportSubmission['reportType'];
       stationOffice?: string;
+      mergedByInvestigator?: string;
     },
     auditDetails?: string
   ) => {

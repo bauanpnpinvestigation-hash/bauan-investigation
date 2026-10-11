@@ -189,24 +189,96 @@ export async function downloadAttachmentFile(fileUrl: string, fileName: string):
   }
 }
 
+async function compressImageFileToDataUrl(
+  file: File,
+  maxDimension: number = 1024,
+  quality: number = 0.68
+): Promise<string> {
+  return new Promise((resolve) => {
+    const fallbackRead = () => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result || ''));
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    };
+
+    if (typeof window === 'undefined' || !file.type.startsWith('image/')) {
+      fallbackRead();
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        URL.revokeObjectURL(objectUrl);
+        let width = img.naturalWidth || img.width || 800;
+        let height = img.naturalHeight || img.height || 600;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width >= height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          fallbackRead();
+          return;
+        }
+
+        // Fill white background for transparent PNGs converted to JPEG
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        let compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        // If still over ~90KB in base64 chars, step down once more to ensure multi-file merges stay well below 1MB
+        if (compressedDataUrl.length > 90000) {
+          const smallerCanvas = document.createElement('canvas');
+          const scale = 0.75;
+          smallerCanvas.width = Math.max(1, Math.round(canvas.width * scale));
+          smallerCanvas.height = Math.max(1, Math.round(canvas.height * scale));
+          const sCtx = smallerCanvas.getContext('2d');
+          if (sCtx) {
+            sCtx.fillStyle = '#FFFFFF';
+            sCtx.fillRect(0, 0, smallerCanvas.width, smallerCanvas.height);
+            sCtx.drawImage(canvas, 0, 0, smallerCanvas.width, smallerCanvas.height);
+            compressedDataUrl = smallerCanvas.toDataURL('image/jpeg', 0.55);
+          }
+        }
+        resolve(compressedDataUrl);
+      } catch {
+        fallbackRead();
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      fallbackRead();
+    };
+    img.src = objectUrl;
+  });
+}
+
 async function createLocalFallbackResult(
   file: File,
   folder: string,
   public_id: string
 ): Promise<CloudinaryUploadResult> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const resultStr = reader.result as string;
-      resolve({
-        url: resultStr,
-        secure_url: resultStr,
-        public_id: `${folder}/${public_id}`,
-        folder: folder,
-        format: file.type.split('/')[1] || 'jpg',
-        bytes: file.size,
-      });
-    };
-    reader.readAsDataURL(file);
-  });
+  const resultStr = await compressImageFileToDataUrl(file);
+  return {
+    url: resultStr,
+    secure_url: resultStr,
+    public_id: `${folder}/${public_id}`,
+    folder: folder,
+    format: file.type.startsWith('image/') ? 'jpg' : file.type.split('/')[1] || 'jpg',
+    bytes: resultStr ? Math.round((resultStr.length * 3) / 4) : file.size,
+  };
 }

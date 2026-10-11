@@ -67,6 +67,11 @@
         "stationOffice": {
           "type": "string",
           "description": "Police department or station unit"
+        },
+        "mergedByInvestigator": {
+          "type": "string",
+          "description": "Investigator who merged the case file",
+          "enum": ["Kim Edsel Saycon", "Bienne Care"]
         }
       },
       "required": ["referenceNumber", "reportType", "status", "personalInformation"]

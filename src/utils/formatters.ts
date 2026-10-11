@@ -1,4 +1,4 @@
-import { PersonalInformation } from '../types/reports';
+import { PersonalInformation, DocumentCategoryType } from '../types/reports';
 import { formatHumanDate } from './dateUtils';
 
 /**
@@ -10,6 +10,83 @@ function capitalizeWords(str: string): string {
     .split(' ')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+/**
+ * Formats a person's full name cleanly from PersonalInformation.
+ */
+export function formatPersonFullName(info?: Partial<PersonalInformation> | null): string {
+  if (!info) return '';
+  const parts: string[] = [];
+  if (info.firstName?.trim()) parts.push(capitalizeWords(info.firstName.trim()));
+  if (info.middleName?.trim()) {
+    const mid = info.middleName.trim();
+    const formattedMid = mid.length === 1 ? `${mid}.` : mid;
+    parts.push(capitalizeWords(formattedMid));
+  }
+  if (info.lastName?.trim()) parts.push(capitalizeWords(info.lastName.trim()));
+  if (info.suffix?.trim() && info.suffix.trim().toLowerCase() !== 'none') {
+    parts.push(capitalizeWords(info.suffix.trim()));
+  }
+  return parts.join(' ').trim();
+}
+
+/**
+ * Automatically generates the name of a Merged File:
+ * "Vehicular Accident - [Party 1 Full Name] & [Party 2 Full Name]"
+ * (Supports 2 or more involved parties without conflict).
+ */
+export function generateMergedFileTitle(
+  primaryInfo?: Partial<PersonalInformation> | null,
+  mergedParties?: Array<{
+    personalInformation?: Partial<PersonalInformation> | null;
+    partyLabel?: string;
+  }> | null
+): string {
+  const names: string[] = [];
+  const party1Name = formatPersonFullName(primaryInfo) || 'Party 1';
+  names.push(party1Name);
+
+  if (Array.isArray(mergedParties)) {
+    mergedParties.forEach((mp, idx) => {
+      const mpName = formatPersonFullName(mp?.personalInformation);
+      if (mpName) {
+        names.push(mpName);
+      } else if (mp?.partyLabel) {
+        const cleaned = mp.partyLabel
+          .replace(/^Party\s+\d+\s*:\s*/i, '')
+          .replace(/\s*\([^)]*\)\s*$/, '')
+          .trim();
+        names.push(cleaned || `Party ${idx + 2}`);
+      } else {
+        names.push(`Party ${idx + 2}`);
+      }
+    });
+  }
+
+  return `Vehicular Accident - ${names.join(' & ')}`;
+}
+
+/**
+ * Human-readable label for a flat attachment documentCategory.
+ */
+export function getDocumentCategoryLabel(category?: DocumentCategoryType | string): string {
+  switch (category) {
+    case 'OR':
+      return 'Official Receipt (OR)';
+    case 'CR':
+      return 'Certificate of Registration (CR)';
+    case 'OR_CR':
+      return 'Official Receipt & Certificate of Registration (OR/CR)';
+    case 'VALID_ID':
+      return 'Valid ID / Driver License';
+    case 'SCENE_PHOTO':
+      return 'Vehicle / Incident Photo';
+    case 'OTHER':
+      return 'Supporting Document';
+    default:
+      return 'Valid ID / Photo';
+  }
 }
 
 /**

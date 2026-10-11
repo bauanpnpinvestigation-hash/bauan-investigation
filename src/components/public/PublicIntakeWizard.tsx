@@ -16,6 +16,7 @@ import { formatHumanDate, formatHumanDateTime } from '../../utils/dateUtils';
 import {
   formatVehicularAccidentText,
   formatPlaceAndTimeText,
+  getDocumentCategoryLabel,
 } from '../../utils/formatters';
 import { 
   CheckCircle2, 
@@ -223,6 +224,25 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
     const refNo = clientReferenceNumber || generateReferenceNumber();
     const isVehicular = wizardMode === 'vehicular-incident';
 
+    const flatValidatedAttachments: AttachmentItem[] = attachments.map((att) => ({
+      id: String(att.id || `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`),
+      name: String(att.name || 'Document.jpg').trim(),
+      size: Number(att.size) || 0,
+      type: String(att.type || 'image/jpeg').trim(),
+      url: String(att.url || att.previewUrl || '').trim(),
+      previewUrl: '',
+      cloudinaryFolder: String(att.cloudinaryFolder || '').trim(),
+      publicId: String(att.publicId || '').trim(),
+      sourceType: att.sourceType === 'live_capture' ? 'live_capture' : 'upload',
+      documentCategory: att.documentCategory || 'VALID_ID',
+      documentCategoryLabel:
+        att.documentCategoryLabel || getDocumentCategoryLabel(att.documentCategory || 'VALID_ID'),
+      uploadedAt: String(att.uploadedAt || new Date().toISOString()),
+      partyId: 'PRIMARY',
+      partyLabel: `Party 1 (Primary): ${[personalInfo.firstName, personalInfo.lastName].filter(Boolean).join(' ')}`,
+      partyReferenceNumber: refNo,
+    }));
+
     const newSubmission: ReportSubmission = {
       id: `rep_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
       referenceNumber: refNo,
@@ -230,7 +250,20 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
       status: 'NEW',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      personalInformation: { ...personalInfo },
+      personalInformation: {
+        firstName: personalInfo.firstName.trim(),
+        middleName: personalInfo.middleName.trim(),
+        lastName: personalInfo.lastName.trim(),
+        suffix: personalInfo.suffix.trim(),
+        birthday: personalInfo.birthday.trim(),
+        age: personalInfo.age,
+        sex: personalInfo.sex,
+        civilStatus: personalInfo.civilStatus,
+        occupation: personalInfo.occupation.trim(),
+        nationality: personalInfo.nationality.trim() || 'Filipino',
+        address: personalInfo.address.trim(),
+        contactNumber: personalInfo.contactNumber.trim(),
+      },
       reportData: isVehicular
         ? {
             placeOfIncident: vehicularFields.placeOfIncident.trim(),
@@ -243,7 +276,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
             plateNumber: vehicularFields.plateNumber.trim(),
           }
         : {},
-      attachments: [...attachments],
+      attachments: flatValidatedAttachments,
       adminNotes: [],
       auditLogs: [
         {
@@ -983,7 +1016,87 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                   />
                 </div>
 
-                {/* Part 4 (Optional): Valid ID / Driver License / Live Capture Photo */}
+                {/* Part 4 (Optional): Vehicle OR (Official Receipt) & CR (Certificate of Registration) Upload Section */}
+                <div className="bg-white/85 rounded-xl p-5 sm:p-7 border-2 border-amber-300/90 shadow-xs space-y-6">
+                  <div className="border-b border-slate-200 pb-3 flex items-center justify-between gap-2 flex-wrap">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1.5 mb-0.5">
+                        <FileText className="w-4 h-4 text-amber-700" />
+                        <span>Vehicle Registration Documents (OR &amp; CR Upload / Live Capture)</span>
+                      </span>
+                      <h3 className="text-base sm:text-lg font-black text-slate-900">
+                        Upload Vehicle OR &amp; CR (Official Receipt at Certificate of Registration)
+                      </h3>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        Maaaring mag-upload o kumuha ng Live Photo ng iyong <strong>OR (Official Receipt)</strong> at <strong>CR (Certificate of Registration)</strong>. Ligtas at flat na ise-save sa iyong sariling Cloudinary folder.
+                      </p>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-md bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900 shrink-0">
+                      Optional • OR &amp; CR
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6">
+                    {/* 4A: Official Receipt (OR) */}
+                    <div className="p-4 sm:p-5 rounded-xl bg-amber-50/40 border border-amber-200/90 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-900 block">
+                            Document 1 • Official Receipt (OR)
+                          </span>
+                          <h4 className="text-sm sm:text-base font-black text-slate-900">
+                            1. Vehicle Official Receipt (OR ng Sasakyan)
+                          </h4>
+                        </div>
+                      </div>
+                      <FileUploadDropzone
+                        attachments={attachments}
+                        onChange={setAttachments}
+                        reportType="vehicular-incident"
+                        referenceNumber={clientReferenceNumber}
+                        clientName={clientFullNameSlug}
+                        documentCategory="OR"
+                        documentCategoryLabel="Official Receipt (OR)"
+                        filterByCategory={true}
+                        maxFiles={3}
+                        customTitleEn="Upload or Live Capture Official Receipt (OR)"
+                        customTitleFil="(Kuhanan ng Larawan o Mag-upload ng Official Receipt [OR])"
+                        uploadButtonLabel="Upload OR (Official Receipt)"
+                      />
+                    </div>
+
+                    {/* 4B: Certificate of Registration (CR) */}
+                    <div className="p-4 sm:p-5 rounded-xl bg-blue-50/40 border border-blue-200/90 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-900 block">
+                            Document 2 • Certificate of Registration (CR)
+                          </span>
+                          <h4 className="text-sm sm:text-base font-black text-slate-900">
+                            2. Vehicle Certificate of Registration (CR ng Sasakyan)
+                          </h4>
+                        </div>
+                      </div>
+                      <FileUploadDropzone
+                        attachments={attachments}
+                        onChange={setAttachments}
+                        reportType="vehicular-incident"
+                        referenceNumber={clientReferenceNumber}
+                        clientName={clientFullNameSlug}
+                        documentCategory="CR"
+                        documentCategoryLabel="Certificate of Registration (CR)"
+                        filterByCategory={true}
+                        hideFolderBanner={true}
+                        maxFiles={3}
+                        customTitleEn="Upload or Live Capture Certificate of Registration (CR)"
+                        customTitleFil="(Kuhanan ng Larawan o Mag-upload ng Certificate of Registration [CR])"
+                        uploadButtonLabel="Upload CR (Certificate of Registration)"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Part 5 (Optional): Valid ID / Driver License / Live Capture Photo */}
                 <div className="bg-white/80 rounded-xl p-5 sm:p-7 border border-slate-200/80 shadow-xs space-y-4">
                   <div className="border-b border-slate-200 pb-3 flex items-center justify-between gap-2">
                     <div>
@@ -992,10 +1105,10 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                         <span>Optional Driver's License / Valid ID / Vehicle Photo</span>
                       </span>
                       <h3 className="text-base sm:text-lg font-black text-slate-900">
-                        Valid ID, License or Live Photo (Opsyonal na ID o Live Capture)
+                        Driver&apos;s License, Valid ID or Vehicle Photo (Opsyonal na ID o Larawan)
                       </h3>
                     </div>
-                    <span className="px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-600 shrink-0">
+                    <span className="px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-600 shrink-0">
                       Optional (Opsyonal)
                     </span>
                   </div>
@@ -1006,6 +1119,14 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                     reportType="vehicular-incident"
                     referenceNumber={clientReferenceNumber}
                     clientName={clientFullNameSlug}
+                    documentCategory="VALID_ID"
+                    documentCategoryLabel="Valid ID / Driver License"
+                    filterByCategory={true}
+                    hideFolderBanner={true}
+                    maxFiles={5}
+                    customTitleEn="Upload or Live Capture Driver's License / Valid ID / Photo"
+                    customTitleFil="(Kuhanan ng Larawan o Mag-upload ng Driver's License / Valid ID)"
+                    uploadButtonLabel="Upload Driver's License / ID"
                   />
                 </div>
 
@@ -1361,12 +1482,12 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                   </dl>
                 </div>
 
-                {/* Review Attached / Captured Photos (if any) */}
+                {/* Review Attached / Captured Photos, OR, CR, and Valid IDs (if any) */}
                 <div className="bg-white/75 rounded-xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                     <h4 className="font-extrabold text-sm sm:text-base text-slate-900 flex items-center gap-2">
                       <Camera className="w-4 h-4 text-blue-800" />
-                      <span>VALID ID / CAPTURED PHOTOS ({attachments.length})</span>
+                      <span>UPLOADED OR / CR / VALID ID / PHOTOS ({attachments.length})</span>
                     </h4>
                     <button
                       type="button"
@@ -1374,13 +1495,13 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                       className="inline-flex items-center gap-1 text-xs font-bold text-blue-900 hover:text-blue-950 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 cursor-pointer"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
-                      <span>[ADD / EDIT PHOTO]</span>
+                      <span>[ADD / EDIT FILES]</span>
                     </button>
                   </div>
 
                   {attachments.length === 0 ? (
                     <p className="text-xs text-slate-500 italic">
-                      No ID or photo attached (Optional — Maaaring magpatuloy kahit walang ID photo o pindutin ang [ADD / EDIT PHOTO] kung nais mag-capture/upload).
+                      No OR, CR, ID, or photo attached (Optional — Maaaring magpatuloy o pindutin ang [ADD / EDIT FILES] kung nais mag-upload ng OR, CR, o Valid ID).
                     </p>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1397,15 +1518,21 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                             />
                           )}
                           <div className="overflow-hidden space-y-0.5">
-                            <span
-                              className={`inline-block text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
-                                att.sourceType === 'live_capture'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-blue-100 text-blue-800'
-                              }`}
-                            >
-                              {att.sourceType === 'live_capture' ? 'LIVE CAPTURE' : 'UPLOADED PHOTO'}
-                            </span>
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span className="inline-block text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">
+                                {att.documentCategoryLabel ||
+                                  getDocumentCategoryLabel(att.documentCategory)}
+                              </span>
+                              <span
+                                className={`inline-block text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
+                                  att.sourceType === 'live_capture'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-blue-100 text-blue-800'
+                                }`}
+                              >
+                                {att.sourceType === 'live_capture' ? 'LIVE CAPTURE' : 'UPLOADED'}
+                              </span>
+                            </div>
                             <p className="text-xs font-bold text-slate-900 truncate">{att.name}</p>
                             {att.cloudinaryFolder && (
                               <p className="text-[10px] font-mono text-slate-500 truncate">

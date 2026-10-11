@@ -82,6 +82,14 @@ export interface ReportTypeDefinition {
   ) => string;
 }
 
+export type DocumentCategoryType =
+  | 'VALID_ID'
+  | 'OR'
+  | 'CR'
+  | 'OR_CR'
+  | 'SCENE_PHOTO'
+  | 'OTHER';
+
 export interface AttachmentItem {
   id: string;
   name: string;
@@ -92,6 +100,8 @@ export interface AttachmentItem {
   cloudinaryFolder?: string;
   publicId?: string;
   sourceType?: 'upload' | 'live_capture';
+  documentCategory?: DocumentCategoryType;
+  documentCategoryLabel?: string;
   uploadedAt: string;
   partyId?: string;
   partyLabel?: string;
@@ -136,6 +146,13 @@ export interface AuditLogEntry {
   details?: string;
 }
 
+export type MergeInvestigatorName = 'Kim Edsel Saycon' | 'Bienne Care';
+
+export const MERGE_INVESTIGATOR_OPTIONS: MergeInvestigatorName[] = [
+  'Kim Edsel Saycon',
+  'Bienne Care',
+];
+
 export interface ReportSubmission {
   id: string;
   referenceNumber: string;
@@ -149,6 +166,8 @@ export interface ReportSubmission {
   reportData: Record<string, any>;
   mergedParties?: MergedPartyRecord[];
   isMergedFile?: boolean;
+  mergedFileTitle?: string;
+  mergedByInvestigator?: string;
   sourceReportIds?: string[];
   sourceReferenceNumbers?: string[];
   attachments: AttachmentItem[];

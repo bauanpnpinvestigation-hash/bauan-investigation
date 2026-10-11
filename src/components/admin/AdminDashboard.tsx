@@ -1,8 +1,15 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ReportSubmission, ReportStatus, ReportTypeId } from '../../types/reports';
+import {
+  ReportSubmission,
+  ReportStatus,
+  ReportTypeId,
+  MERGE_INVESTIGATOR_OPTIONS,
+  MergeInvestigatorName,
+} from '../../types/reports';
 import { REPORT_TYPES } from '../../config/reportTypes';
 import { StatusBadge } from '../common/StatusBadge';
 import { formatHumanDate, formatHumanDateTime } from '../../utils/dateUtils';
+import { generateMergedFileTitle } from '../../utils/formatters';
 import { BrandLogo } from '../common/BrandLogo';
 import { BackgroundWatermark } from '../common/BackgroundWatermark';
 import { PWAInstallButton } from '../common/PWAInstallButton';
@@ -46,7 +53,8 @@ interface AdminDashboardProps {
   onMergeReports?: (
     primaryReportId: string,
     secondaryReportIds: string[],
-    deleteMergedOriginals?: boolean
+    deleteMergedOriginals?: boolean,
+    mergedByInvestigator?: MergeInvestigatorName
   ) => Promise<void> | void;
   onLogout: () => void;
   onOpenQRCode: () => void;
@@ -88,6 +96,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedForMerge, setSelectedForMerge] = useState<string[]>([]);
   const [showMergeModal, setShowMergeModal] = useState<boolean>(false);
   const [primaryMergeId, setPrimaryMergeId] = useState<string>('');
+  const [selectedMergeInvestigator, setSelectedMergeInvestigator] =
+    useState<MergeInvestigatorName>('Kim Edsel Saycon');
   const [deleteOriginalsOnMerge, setDeleteOriginalsOnMerge] = useState<boolean>(false);
   const [isMerging, setIsMerging] = useState<boolean>(false);
 
@@ -114,7 +124,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     setIsMerging(true);
     try {
-      await onMergeReports(targetPrimary, secondaryIds, deleteOriginalsOnMerge);
+      await onMergeReports(
+        targetPrimary,
+        secondaryIds,
+        deleteOriginalsOnMerge,
+        selectedMergeInvestigator
+      );
       setShowMergeModal(false);
       setSelectedForMerge([]);
       setPrimaryMergeId('');
@@ -830,8 +845,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 const mParties = normalizeFirestoreArray(mItem.mergedParties);
                 const srcRefs = normalizeFirestoreArray<string>(mItem.sourceReferenceNumbers);
                 const srcIds = normalizeFirestoreArray<string>(mItem.sourceReportIds);
-                const reportTypeName =
-                  REPORT_TYPES[mItem.reportType]?.nameEn || mItem.reportType;
+                const autoMergedTitle =
+                  mItem.mergedFileTitle ||
+                  mItem.reportData?.mergedFileTitle ||
+                  generateMergedFileTitle(pi, mParties);
 
                 return (
                   <div
@@ -840,6 +857,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     className="p-4 hover:bg-indigo-50/50 transition-colors flex flex-col lg:flex-row lg:items-center justify-between gap-3 cursor-pointer"
                   >
                     <div className="space-y-1.5 min-w-0">
+                      {/* Auto-Generated Merged File Title */}
+                      <div className="text-sm sm:text-base font-black text-indigo-950 flex items-center gap-2 flex-wrap">
+                        <GitMerge className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>{autoMergedTitle}</span>
+                      </div>
+
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="px-2 py-0.5 rounded bg-indigo-900 text-amber-300 font-mono font-black text-xs">
                           #{mItem.referenceNumber}
@@ -848,13 +871,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <Users className="w-3 h-3" />
                           <span>{1 + mParties.length} Parties Combined</span>
                         </span>
-                        <span className="text-xs font-bold text-slate-600">
-                          • {reportTypeName}
-                        </span>
+                        {(mItem.mergedByInvestigator || mItem.reportData?.mergedByInvestigator) && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 text-blue-950 border border-blue-300 text-[10px] font-black">
+                            <Shield className="w-3 h-3 text-blue-800" />
+                            <span>
+                              Investigator: {mItem.mergedByInvestigator || mItem.reportData?.mergedByInvestigator}
+                            </span>
+                          </span>
+                        )}
                         <StatusBadge status={mItem.status} size="sm" />
                       </div>
 
-                      <div className="text-xs sm:text-sm font-extrabold text-slate-900 flex items-center gap-2 flex-wrap">
+                      <div className="text-xs font-extrabold text-slate-700 flex items-center gap-2 flex-wrap">
                         <span>Party 1: {party1Name || 'Primary Client'}</span>
                         {mParties.map((mp: any, idx: number) => {
                           const mpi = mp?.personalInformation || {};
@@ -1036,10 +1064,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <td className="py-3 px-4 font-mono font-bold text-blue-950">
                             <div>{item.referenceNumber}</div>
                             {mergedParties.length > 0 ? (
-                              <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-sans font-extrabold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                                <Users className="w-3 h-3 text-indigo-700" />
-                                <span>Merged File ({1 + mergedParties.length} Parties)</span>
-                              </span>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-sans font-extrabold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                                  <Users className="w-3 h-3 text-indigo-700" />
+                                  <span>Merged File ({1 + mergedParties.length} Parties)</span>
+                                </span>
+                                {(item.mergedByInvestigator || item.reportData?.mergedByInvestigator) && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-sans font-bold text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                    <Shield className="w-2.5 h-2.5 text-blue-700" />
+                                    <span>
+                                      {item.mergedByInvestigator || item.reportData?.mergedByInvestigator}
+                                    </span>
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               (() => {
                                 const linkedMerged = getMergedFilesContainingOriginal(item);
@@ -1070,7 +1108,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {reportTypeName}
                           </td>
                           <td className="py-3 px-4 font-bold text-slate-900">
-                            <div>{fullName || '—'}</div>
+                            {isMergedReportRecord(item) ? (
+                              <div className="text-indigo-950 font-black">
+                                {item.mergedFileTitle ||
+                                  item.reportData?.mergedFileTitle ||
+                                  generateMergedFileTitle(pi, mergedParties)}
+                              </div>
+                            ) : (
+                              <div>{fullName || '—'}</div>
+                            )}
                             {mergedParties.length > 0 && (
                               <div className="mt-1 space-y-0.5">
                                 {mergedParties.map((mp: any) => {
@@ -1401,6 +1447,70 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   })}
                 </div>
               </div>
+
+              {/* Investigator Selection Section (Only 2 Options: Kim Edsel Saycon or Bienne Care) */}
+              <div>
+                <label className="block font-extrabold text-slate-900 mb-2">
+                  Choose Investigator Who Did This Merge (2 Options Only):
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {MERGE_INVESTIGATOR_OPTIONS.map((invName) => {
+                    const isSelectedInv = selectedMergeInvestigator === invName;
+                    return (
+                      <label
+                        key={invName}
+                        className={`flex items-center gap-2.5 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                          isSelectedInv
+                            ? 'bg-indigo-50 border-indigo-700 ring-2 ring-indigo-500/20 text-indigo-950'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="mergeInvestigatorDashboard"
+                          value={invName}
+                          checked={isSelectedInv}
+                          onChange={() => setSelectedMergeInvestigator(invName)}
+                          className="w-4 h-4 text-indigo-900 focus:ring-indigo-900 cursor-pointer"
+                        />
+                        <div className="min-w-0">
+                          <span className="font-black text-xs sm:text-sm block">
+                            {invName}
+                          </span>
+                          <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1">
+                            <Shield className="w-3 h-3" />
+                            <span>Case Investigator</span>
+                          </span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Auto-Generated Merged File Name Preview */}
+              {(() => {
+                const pId = primaryMergeId || selectedForMerge[0];
+                const pRec = reports.find((r) => r.id === pId);
+                const sRecs = selectedForMerge
+                  .filter((id) => id !== pId)
+                  .map((id) => reports.find((r) => r.id === id))
+                  .filter(Boolean) as ReportSubmission[];
+                const previewTitle = generateMergedFileTitle(
+                  pRec?.personalInformation,
+                  sRecs.map((sr) => ({ personalInformation: sr.personalInformation }))
+                );
+                return (
+                  <div className="p-3.5 bg-indigo-50 border border-indigo-300 rounded-xl space-y-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800 block">
+                      Auto-Generated Merged File Name:
+                    </span>
+                    <p className="text-xs sm:text-sm font-black text-indigo-950">
+                      {previewTitle}
+                    </p>
+                  </div>
+                );
+              })()}
 
               <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl space-y-1">
                 <span className="font-extrabold text-emerald-950 flex items-center gap-1.5 text-xs">

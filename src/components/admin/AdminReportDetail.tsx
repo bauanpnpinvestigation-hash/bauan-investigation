@@ -3,9 +3,12 @@ import {
   ReportSubmission,
   ReportStatus,
   AttachmentItem,
+  DocumentCategoryType,
   MergedPartyRecord,
   PersonalInformation,
   ReportTypeId,
+  MERGE_INVESTIGATOR_OPTIONS,
+  MergeInvestigatorName,
 } from '../../types/reports';
 import { REPORT_TYPES } from '../../config/reportTypes';
 import { CopyButton } from '../common/CopyButton';
@@ -20,6 +23,8 @@ import {
   getIncidentPlaceValue,
   getIncidentTimeValue,
   formatSectionText,
+  generateMergedFileTitle,
+  getDocumentCategoryLabel,
 } from '../../utils/formatters';
 import { formatHumanDate, formatHumanDateTime, calculateAgeFromBirthday } from '../../utils/dateUtils';
 import {
@@ -71,6 +76,7 @@ import {
   MapPin,
   Clock,
   GitMerge,
+  Layers,
   Users,
   UserPlus,
   Split,
@@ -95,13 +101,15 @@ interface AdminReportDetailProps {
       attachments?: AttachmentItem[];
       reportType?: ReportSubmission['reportType'];
       stationOffice?: string;
+      mergedByInvestigator?: string;
     },
     auditDetails?: string
   ) => Promise<void> | void;
   onMergeReports?: (
     primaryReportId: string,
     secondaryReportIds: string[],
-    deleteMergedOriginals?: boolean
+    deleteMergedOriginals?: boolean,
+    mergedByInvestigator?: MergeInvestigatorName
   ) => Promise<void> | void;
   onUploadAttachments?: (
     reportId: string,
@@ -205,12 +213,23 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [mergeSearchQuery, setMergeSearchQuery] = useState('');
   const [selectedIdsToMerge, setSelectedIdsToMerge] = useState<string[]>([]);
+  const [selectedMergeInvestigator, setSelectedMergeInvestigator] = useState<MergeInvestigatorName>(
+    (report.mergedByInvestigator === 'Bienne Care' ||
+    report.reportData?.mergedByInvestigator === 'Bienne Care'
+      ? 'Bienne Care'
+      : 'Kim Edsel Saycon') as MergeInvestigatorName
+  );
   const [deleteOriginalsOnMerge, setDeleteOriginalsOnMerge] = useState(true);
   const [isMergingRecords, setIsMergingRecords] = useState(false);
 
-  // Conflict-Free Photo Upload & Live Camera Capture State for Single/Combined File
+  // Conflict-Free Photo & OR/CR Upload & Live Camera Capture State for Single/Combined File
   const [showPhotoUploadPanel, setShowPhotoUploadPanel] = useState(false);
   const [selectedPhotoPartyId, setSelectedPhotoPartyId] = useState<string>('PRIMARY');
+  const [selectedDocumentCategory, setSelectedDocumentCategory] =
+    useState<DocumentCategoryType>('VALID_ID');
+  const [activeAttachmentFilter, setActiveAttachmentFilter] = useState<
+    'ALL' | 'OR' | 'CR' | 'VALID_ID' | 'SCENE_PHOTO'
+  >('ALL');
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -638,10 +657,17 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
     if (!onMergeReports || selectedIdsToMerge.length === 0) return;
     setIsMergingRecords(true);
     try {
-      await onMergeReports(report.id, selectedIdsToMerge, deleteOriginalsOnMerge);
+      await onMergeReports(
+        report.id,
+        selectedIdsToMerge,
+        deleteOriginalsOnMerge,
+        selectedMergeInvestigator
+      );
       setSelectedIdsToMerge([]);
       setShowMergeModal(false);
-      showTempSuccess('Selected client documents merged into this single file without conflict!');
+      showTempSuccess(
+        `Selected client documents merged into single file (Investigator: ${selectedMergeInvestigator})!`
+      );
     } finally {
       setIsMergingRecords(false);
     }
@@ -653,13 +679,16 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
 
   const uploadFilesForSelectedParty = async (
     files: File[],
-    sourceType: 'upload' | 'live_capture'
+    sourceType: 'upload' | 'live_capture',
+    overrideCategory?: DocumentCategoryType
   ) => {
     if (!files.length) return;
     setIsUploadingPhotos(true);
     try {
       const targetParty =
         partyOptions.find((p) => p.id === selectedPhotoPartyId) || partyOptions[0];
+      const docCategory = overrideCategory || selectedDocumentCategory || 'VALID_ID';
+      const docCategoryLabel = getDocumentCategoryLabel(docCategory);
       const uploadedItems: AttachmentItem[] = [];
 
       for (const file of files) {
@@ -671,18 +700,20 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
 
         uploadedItems.push({
           id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-          name: file.name,
-          size: file.size || result.bytes || 0,
-          type: file.type || 'image/jpeg',
-          url: result.secure_url || result.url,
-          previewUrl: result.secure_url || result.url,
-          cloudinaryFolder: result.folder,
-          publicId: result.public_id,
+          name: String(file.name || `${docCategory}_${Date.now()}.jpg`).trim(),
+          size: Number(file.size || result.bytes || 0) || 0,
+          type: String(file.type || 'image/jpeg').trim(),
+          url: String(result.secure_url || result.url || '').trim(),
+          previewUrl: '',
+          cloudinaryFolder: String(result.folder || '').trim(),
+          publicId: String(result.public_id || '').trim(),
           sourceType,
+          documentCategory: docCategory,
+          documentCategoryLabel: docCategoryLabel,
           uploadedAt: new Date().toISOString(),
-          partyId: targetParty.id,
-          partyLabel: targetParty.label,
-          partyReferenceNumber: targetParty.refNumber,
+          partyId: String(targetParty.id).trim(),
+          partyLabel: String(targetParty.label).trim(),
+          partyReferenceNumber: String(targetParty.refNumber).trim(),
         });
       }
 
@@ -692,12 +723,12 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
         await onUpdateCompleteReport(
           report.id,
           { attachments: [...safeAttachments, ...uploadedItems] },
-          `Uploaded ${uploadedItems.length} photo(s) for ${targetParty.label}`
+          `Uploaded ${uploadedItems.length} ${docCategoryLabel} file(s) for ${targetParty.label}`
         );
       }
 
       showTempSuccess(
-        `Uploaded ${uploadedItems.length} photo(s) to ${targetParty.label} without conflict!`
+        `Uploaded ${uploadedItems.length} ${docCategoryLabel} file(s) to ${targetParty.label} (flat & validated)!`
       );
     } catch (err) {
       console.error('[Photo Upload Error]:', err);
@@ -779,18 +810,22 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                {isCombinedFile ? `COMBINED CASE FILE #${report.referenceNumber}` : `REQUEST #${report.referenceNumber}`}
+                {isCombinedFile || report.isMergedFile
+                  ? report.mergedFileTitle ||
+                    report.reportData?.mergedFileTitle ||
+                    generateMergedFileTitle(personalInfo, safeMergedParties)
+                  : `REQUEST #${report.referenceNumber}`}
               </h2>
               <StatusBadge status={report.status} />
               {isCombinedFile && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-indigo-900 text-white shadow-2xs">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-black bg-indigo-900 text-white shadow-2xs">
                   <Users className="w-3.5 h-3.5 text-amber-300" />
                   <span>{totalPartiesCount} COMBINED PARTIES</span>
                 </span>
               )}
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Report Type:{' '}
+              Ref #: <span className="font-mono font-bold text-slate-800">{report.referenceNumber}</span> • Report Type:{' '}
               <span className="font-bold text-slate-700">
                 {reportConfig?.nameEn || report.reportType}
               </span>{' '}
@@ -950,18 +985,73 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-indigo-500 text-white">
+                  <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-indigo-500 text-white">
                     Merged Case File ({totalPartiesCount} Parties Combined)
                   </span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
                     All Original Client Files Preserved Intact
                   </span>
+                  {(report.mergedByInvestigator || report.reportData?.mergedByInvestigator) && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-amber-400 text-slate-950">
+                      <UserCheck className="w-3 h-3" />
+                      <span>
+                        Investigator: {report.mergedByInvestigator || report.reportData?.mergedByInvestigator}
+                      </span>
+                    </span>
+                  )}
                 </div>
-                <p className="text-xs text-indigo-100 font-medium mt-1">
+                <h3 className="text-sm sm:text-base font-black text-amber-300 mt-1.5">
+                  {report.mergedFileTitle ||
+                    report.reportData?.mergedFileTitle ||
+                    generateMergedFileTitle(personalInfo, safeMergedParties)}
+                </h3>
+                <p className="text-xs text-indigo-100 font-medium mt-0.5">
                   This is a dedicated Merged File combining {totalPartiesCount} client submissions. All original submitted files remain 100% untouched in the Original Client Submissions section.
                 </p>
               </div>
             </div>
+
+            {onUpdateCompleteReport && (
+              <div className="flex items-center gap-2 bg-indigo-950/80 border border-indigo-700 rounded-xl p-2.5 shrink-0">
+                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-200">
+                  Investigator:
+                </span>
+                {MERGE_INVESTIGATOR_OPTIONS.map((invOpt) => {
+                  const currentInv =
+                    report.mergedByInvestigator ||
+                    report.reportData?.mergedByInvestigator ||
+                    'Kim Edsel Saycon';
+                  const isActiveInv = currentInv === invOpt;
+                  return (
+                    <button
+                      key={invOpt}
+                      type="button"
+                      onClick={() =>
+                        onUpdateCompleteReport(
+                          report.id,
+                          {
+                            mergedByInvestigator: invOpt,
+                            reportData: {
+                              ...(report.reportData || {}),
+                              mergedByInvestigator: invOpt,
+                              investigatorOnCase: invOpt,
+                            },
+                          },
+                          `Updated Merged File Investigator to ${invOpt}`
+                        )
+                      }
+                      className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                        isActiveInv
+                          ? 'bg-amber-400 text-slate-950 shadow-xs'
+                          : 'bg-indigo-900/70 hover:bg-indigo-800 text-indigo-200 border border-indigo-700'
+                      }`}
+                    >
+                      {invOpt}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {onSelectReport && (
@@ -1053,10 +1143,10 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
           </div>
 
           <div className="p-5 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
               <div>
                 <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-1.5">
-                  Assign Uploaded Photo To Which Client / Party?
+                  1. Assign To Which Client / Party?
                 </label>
                 <select
                   value={selectedPhotoPartyId}
@@ -1068,6 +1158,24 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                       {po.label}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-1.5">
+                  2. Document Category (OR / CR / Valid ID / Photo)
+                </label>
+                <select
+                  value={selectedDocumentCategory}
+                  onChange={(e) =>
+                    setSelectedDocumentCategory(e.target.value as DocumentCategoryType)
+                  }
+                  className="w-full px-3.5 py-2.5 bg-amber-50/70 border border-amber-300 rounded-xl text-xs sm:text-sm font-black text-slate-900 focus:outline-hidden focus:border-amber-600"
+                >
+                  <option value="OR">Official Receipt (OR)</option>
+                  <option value="CR">Certificate of Registration (CR)</option>
+                  <option value="VALID_ID">Valid ID / Driver&apos;s License</option>
+                  <option value="SCENE_PHOTO">Vehicle / Incident Scene Photo</option>
                 </select>
               </div>
 
@@ -1088,7 +1196,9 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                 >
                   <UploadCloud className="w-4 h-4 text-amber-300" />
                   <span>
-                    {isUploadingPhotos ? 'Uploading to Cloudinary...' : 'Select Photo(s) from Device'}
+                    {isUploadingPhotos
+                      ? 'Uploading to Cloudinary...'
+                      : `Upload ${getDocumentCategoryLabel(selectedDocumentCategory)}`}
                   </span>
                 </button>
 
@@ -2519,17 +2629,17 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
             );
           })}
 
-          {/* CLIENT VALID ID / CAPTURED PHOTO GALLERY (WITH UPLOAD TO FILE, PARTY TAGS & DOWNLOAD) */}
+          {/* CLIENT VALID ID, OR, CR & CAPTURED PHOTO GALLERY (WITH UPLOAD TO FILE, PARTY TAGS & DOWNLOAD) */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="px-5 py-3.5 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Camera className="w-4 h-4 text-emerald-400 shrink-0" />
                 <div>
                   <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider">
-                    Case File Photos, Valid IDs & Evidence ({safeAttachments.length})
+                    Case File OR, CR, Valid IDs &amp; Photos ({safeAttachments.length})
                   </h3>
                   <p className="text-[11px] text-slate-300">
-                    Conflict-free photo gallery for all combined parties • Upload, View & Download
+                    Flat, non-nested document &amp; photo storage for all involved parties • Upload OR, CR, ID &amp; Download
                   </p>
                 </div>
               </div>
@@ -2537,37 +2647,147 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
-                  onClick={() => setShowPhotoUploadPanel((prev) => !prev)}
+                  onClick={() => {
+                    setSelectedDocumentCategory('OR');
+                    setShowPhotoUploadPanel(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-black transition-colors cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Upload OR</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDocumentCategory('CR');
+                    setShowPhotoUploadPanel(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-black transition-colors cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Upload CR</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDocumentCategory('VALID_ID');
+                    setShowPhotoUploadPanel((prev) => !prev);
+                  }}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-extrabold transition-colors cursor-pointer shadow-xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Upload / Capture Photo to File</span>
+                  <span>Upload ID / Photo</span>
                 </button>
               </div>
             </div>
 
-            <div className="p-5">
+            <div className="p-5 space-y-4">
+              {/* Filter Tabs by Document Category (ALL / OR / CR / VALID_ID / SCENE_PHOTO) */}
+              {safeAttachments.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+                  {[
+                    { id: 'ALL', label: `All Files (${safeAttachments.length})` },
+                    {
+                      id: 'OR',
+                      label: `Official Receipt [OR] (${
+                        safeAttachments.filter((a) => a.documentCategory === 'OR').length
+                      })`,
+                    },
+                    {
+                      id: 'CR',
+                      label: `Certificate of Registration [CR] (${
+                        safeAttachments.filter((a) => a.documentCategory === 'CR').length
+                      })`,
+                    },
+                    {
+                      id: 'VALID_ID',
+                      label: `Valid ID / License (${
+                        safeAttachments.filter(
+                          (a) => !a.documentCategory || a.documentCategory === 'VALID_ID'
+                        ).length
+                      })`,
+                    },
+                    {
+                      id: 'SCENE_PHOTO',
+                      label: `Scene / Vehicle Photos (${
+                        safeAttachments.filter((a) => a.documentCategory === 'SCENE_PHOTO').length
+                      })`,
+                    },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveAttachmentFilter(tab.id as any)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                        activeAttachmentFilter === tab.id
+                          ? 'bg-slate-900 text-white shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {safeAttachments.length === 0 ? (
-                <div className="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-2">
+                <div className="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-3">
                   <ImageIcon className="w-7 h-7 text-slate-400 mx-auto" />
                   <p className="text-xs font-semibold text-slate-600">
-                    No Valid ID or Live Photo attached to this file yet.
+                    No OR, CR, Valid ID, or Live Photo attached to this file yet.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowPhotoUploadPanel(true)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-900 hover:bg-blue-950 text-white rounded-xl text-xs font-bold cursor-pointer"
-                  >
-                    <UploadCloud className="w-4 h-4" />
-                    <span>Upload Photo to This File Now</span>
-                  </button>
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDocumentCategory('OR');
+                        setShowPhotoUploadPanel(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-extrabold cursor-pointer"
+                    >
+                      <UploadCloud className="w-4 h-4" />
+                      <span>Upload OR (Official Receipt)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDocumentCategory('CR');
+                        setShowPhotoUploadPanel(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-extrabold cursor-pointer"
+                    >
+                      <UploadCloud className="w-4 h-4" />
+                      <span>Upload CR (Certificate of Registration)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDocumentCategory('VALID_ID');
+                        setShowPhotoUploadPanel(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-950 text-white rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      <UploadCloud className="w-4 h-4" />
+                      <span>Upload Valid ID / Photo</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {safeAttachments.map((att) => {
+                  {safeAttachments
+                    .filter((att) => {
+                      if (activeAttachmentFilter === 'ALL') return true;
+                      const cat = att.documentCategory || 'VALID_ID';
+                      return cat === activeAttachmentFilter;
+                    })
+                    .map((att) => {
                     const photoSrc = att.url || att.previewUrl || '';
                     const isPdf = (att.type || '').toLowerCase().includes('pdf');
+                    const catLabel =
+                      att.documentCategoryLabel || getDocumentCategoryLabel(att.documentCategory);
                     const downloadFileName = `${att.partyReferenceNumber || report.referenceNumber}_${
+                      att.documentCategory || 'DOC'
+                    }_${
                       (personalInfo.lastName || 'Client').replace(/[^a-zA-Z0-9_-]/g, '_')
                     }_${att.name || 'Photo.jpg'}`;
                     const itemFolder =
@@ -2606,15 +2826,19 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                               <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
                                 <span
                                   className={`px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs ${
-                                    att.sourceType === 'live_capture'
+                                    att.documentCategory === 'OR'
+                                      ? 'bg-amber-500 text-slate-950'
+                                      : att.documentCategory === 'CR'
+                                      ? 'bg-indigo-600 text-white'
+                                      : att.sourceType === 'live_capture'
                                       ? 'bg-emerald-600 text-white'
                                       : 'bg-blue-800 text-white'
                                   }`}
                                 >
-                                  {att.sourceType === 'live_capture' ? 'LIVE CAPTURE' : 'PHOTO / ID'}
+                                  {catLabel}
                                 </span>
                                 {att.partyLabel && (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-400 text-slate-950 shadow-xs truncate max-w-[180px]">
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-black bg-white/95 text-slate-950 shadow-xs truncate max-w-[180px]">
                                     {att.partyLabel}
                                   </span>
                                 )}
@@ -2629,6 +2853,14 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
 
                           {/* Metadata & Folder Info */}
                           <div className="p-3.5 space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-100 px-2 py-0.5 rounded">
+                                {catLabel}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-500">
+                                {att.sourceType === 'live_capture' ? 'Live Camera' : 'Uploaded File'}
+                              </span>
+                            </div>
                             <p className="text-xs font-extrabold text-slate-900 truncate" title={att.name}>
                               {att.name}
                             </p>
@@ -3215,6 +3447,46 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
               <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-950">
                 <strong>Primary Destination File:</strong> #{report.referenceNumber} —{' '}
                 {personalInfo.firstName} {personalInfo.lastName} ({reportConfig?.nameEn})
+              </div>
+
+              {/* Investigator Selection Section (Strictly 2 Options: Kim Edsel Saycon or Bienne Care) */}
+              <div>
+                <label className="block text-xs font-extrabold text-slate-900 mb-2">
+                  Choose Investigator Who Did This Merge (2 Options Only):
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {MERGE_INVESTIGATOR_OPTIONS.map((invName) => {
+                    const isSelectedInv = selectedMergeInvestigator === invName;
+                    return (
+                      <label
+                        key={invName}
+                        className={`flex items-center gap-2.5 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                          isSelectedInv
+                            ? 'bg-indigo-50 border-indigo-700 ring-2 ring-indigo-500/20 text-indigo-950'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="mergeInvestigatorDetail"
+                          value={invName}
+                          checked={isSelectedInv}
+                          onChange={() => setSelectedMergeInvestigator(invName)}
+                          className="w-4 h-4 text-indigo-900 focus:ring-indigo-900 cursor-pointer"
+                        />
+                        <div className="min-w-0">
+                          <span className="font-black text-xs sm:text-sm block">
+                            {invName}
+                          </span>
+                          <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1">
+                            <UserCheck className="w-3 h-3" />
+                            <span>Case Investigator</span>
+                          </span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="relative">

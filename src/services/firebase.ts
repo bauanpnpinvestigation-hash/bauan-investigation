@@ -35,9 +35,14 @@ import {
   AdminNote,
   AuditLogEntry,
   AttachmentItem,
+  DocumentCategoryType,
   MergedPartyRecord,
   PersonalInformation,
 } from '../types/reports';
+import {
+  generateMergedFileTitle,
+  getDocumentCategoryLabel,
+} from '../utils/formatters';
 
 // Canonical Firebase config for bauan-investigation
 export const activeConfig = {
@@ -249,41 +254,228 @@ export function sanitizeFirestorePayload<T>(obj: T, insideArray: boolean = false
 }
 
 /**
- * Guarantees a MergedPartyRecord is 100% flat (no nested arrays, no undefined values)
- * so Firestore never throws a nested-entity or invalid-data error.
+ * Guarantees a PersonalInformation object is 100% flat and validated.
  */
-export function sanitizeMergedPartyForFirestore(party: MergedPartyRecord): MergedPartyRecord {
-  const pi = party.personalInformation || ({} as PersonalInformation);
-  const flatPersonalInfo: PersonalInformation = {
-    firstName: String(pi.firstName || '').trim(),
-    middleName: String(pi.middleName || '').trim(),
-    lastName: String(pi.lastName || '').trim(),
-    suffix: String(pi.suffix || '').trim(),
-    birthday: String(pi.birthday || '').trim(),
-    age: pi.age !== null && pi.age !== undefined && !isNaN(Number(pi.age)) ? Number(pi.age) : null,
-    sex: (pi.sex || '') as any,
-    civilStatus: (pi.civilStatus || '') as any,
-    occupation: String(pi.occupation || '').trim(),
-    nationality: String(pi.nationality || 'Filipino').trim(),
-    address: String(pi.address || '').trim(),
-    contactNumber: String(pi.contactNumber || '').trim(),
+export function sanitizePersonalInfoForFirestore(
+  pi?: Partial<PersonalInformation> | null
+): PersonalInformation {
+  const safe = pi || ({} as Partial<PersonalInformation>);
+  return {
+    firstName: String(safe.firstName || '').trim(),
+    middleName: String(safe.middleName || '').trim(),
+    lastName: String(safe.lastName || '').trim(),
+    suffix: String(safe.suffix || '').trim(),
+    birthday: String(safe.birthday || '').trim(),
+    age:
+      safe.age !== null && safe.age !== undefined && !isNaN(Number(safe.age))
+        ? Number(safe.age)
+        : null,
+    sex: (safe.sex || '') as any,
+    civilStatus: (safe.civilStatus || '') as any,
+    occupation: String(safe.occupation || '').trim(),
+    nationality: String(safe.nationality || 'Filipino').trim(),
+    address: String(safe.address || '').trim(),
+    contactNumber: String(safe.contactNumber || '').trim(),
   };
+}
 
-  const rawReportData = party.reportData || {};
+/**
+ * Guarantees reportData is a 100% flat dictionary of primitive strings (zero nested objects or arrays).
+ */
+export function sanitizeFlatReportDataForFirestore(
+  rawReportData?: Record<string, any> | null
+): Record<string, string> {
   const flatReportData: Record<string, string> = {};
+  if (!rawReportData || typeof rawReportData !== 'object') return flatReportData;
   for (const [k, v] of Object.entries(rawReportData)) {
     if (v !== undefined && v !== null && !Array.isArray(v) && typeof v !== 'object') {
       flatReportData[k] = String(v);
     }
   }
+  return flatReportData;
+}
+
+/**
+ * Guarantees an AttachmentItem (Valid ID, OR, CR, Scene Photo) is 100% flat and validated
+ * with zero nested objects, zero nested arrays, and zero undefined properties.
+ * CRITICAL: Never duplicates base64 `data:` strings in both `url` and `previewUrl`,
+ * which previously doubled attachment storage size and caused merged documents to exceed 1MB.
+ */
+export function sanitizeAttachmentForFirestore(att: Partial<AttachmentItem> | any): AttachmentItem {
+  const validCategories: DocumentCategoryType[] = [
+    'VALID_ID',
+    'OR',
+    'CR',
+    'OR_CR',
+    'SCENE_PHOTO',
+    'OTHER',
+  ];
+  const rawCat = String(att?.documentCategory || '').toUpperCase() as DocumentCategoryType;
+  const documentCategory: DocumentCategoryType = validCategories.includes(rawCat)
+    ? rawCat
+    : 'VALID_ID';
+  const documentCategoryLabel =
+    String(att?.documentCategoryLabel || '').trim() || getDocumentCategoryLabel(documentCategory);
+
+  const url = String(att?.url || att?.previewUrl || '').trim();
+  // Never store a second copy of `url` or any `data:` base64 string inside `previewUrl` in Firestore.
+  // UI components use `att.url || att.previewUrl` / `att.previewUrl || att.url`, so `previewUrl: ''` works seamlessly.
+  const rawPreview = String(att?.previewUrl || '').trim();
+  const previewUrl =
+    !rawPreview || rawPreview === url || rawPreview.startsWith('data:') ? '' : rawPreview;
 
   return {
-    id: String(party.id || `party_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`),
-    referenceNumber: String(party.referenceNumber || ''),
-    reportType: party.reportType || 'personal-intake',
-    partyLabel: String(party.partyLabel || 'Merged Client Record'),
-    createdAt: String(party.createdAt || new Date().toISOString()),
-    mergedAt: String(party.mergedAt || new Date().toISOString()),
+    id: String(att?.id || `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`),
+    name: String(att?.name || 'Document_Attachment').trim().substring(0, 255),
+    size: Number(att?.size || 0) || 0,
+    type: String(att?.type || 'image/jpeg').trim().substring(0, 80),
+    url,
+    previewUrl,
+    cloudinaryFolder: String(att?.cloudinaryFolder || '').trim(),
+    publicId: String(att?.publicId || '').trim(),
+    sourceType: att?.sourceType === 'live_capture' ? 'live_capture' : 'upload',
+    documentCategory,
+    documentCategoryLabel,
+    uploadedAt: String(att?.uploadedAt || new Date().toISOString()),
+    partyId: String(att?.partyId || 'PRIMARY').trim(),
+    partyLabel: String(att?.partyLabel || '').trim(),
+    partyReferenceNumber: String(att?.partyReferenceNumber || '').trim(),
+  };
+}
+
+/**
+ * Compresses a `data:image/...` Base64 string via HTML5 Canvas so that legacy or fallback
+ * base64 attachments fit comfortably inside Firestore's 1,048,576-byte document limit.
+ */
+async function compressBase64DataUrl(
+  dataUrl: string,
+  maxDimension: number = 900,
+  quality: number = 0.6
+): Promise<string> {
+  if (typeof window === 'undefined' || !dataUrl || !dataUrl.startsWith('data:image/')) {
+    return dataUrl;
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        let width = img.naturalWidth || img.width || 800;
+        let height = img.naturalHeight || img.height || 600;
+        if (width > maxDimension || height > maxDimension) {
+          if (width >= height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const compressed = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressed.length < dataUrl.length ? compressed : dataUrl);
+      } catch {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Ensures an array of AttachmentItems stays strictly below Firestore's 1MB document limit
+ * (default budget: 620,000 bytes for all attachments combined, leaving >400KB headroom for fields/parties/logs).
+ */
+export async function optimizeAttachmentsForFirestoreBudget(
+  rawAttachments: AttachmentItem[],
+  maxTotalBytesBudget: number = 620000
+): Promise<AttachmentItem[]> {
+  const sanitized = normalizeFirestoreArray<AttachmentItem>(rawAttachments).map(
+    sanitizeAttachmentForFirestore
+  );
+  if (sanitized.length === 0) return [];
+
+  const dataUrlCount = sanitized.filter((a) => (a.url || '').startsWith('data:image/')).length;
+  if (dataUrlCount === 0) return sanitized;
+
+  // Target per-image max base64 string length so all images combined stay within budget
+  const perImageMaxChars = Math.max(
+    28000,
+    Math.min(85000, Math.floor(maxTotalBytesBudget / Math.max(1, dataUrlCount)))
+  );
+
+  const pass1: AttachmentItem[] = [];
+  for (const att of sanitized) {
+    const attUrl = att.url || '';
+    if (attUrl.startsWith('data:image/') && attUrl.length > perImageMaxChars) {
+      let compressedUrl = await compressBase64DataUrl(attUrl, 860, 0.58);
+      if (compressedUrl.length > perImageMaxChars) {
+        compressedUrl = await compressBase64DataUrl(compressedUrl, 640, 0.48);
+      }
+      if (compressedUrl.length > perImageMaxChars) {
+        compressedUrl = await compressBase64DataUrl(compressedUrl, 480, 0.4);
+      }
+      pass1.push({
+        ...att,
+        url: compressedUrl,
+        previewUrl: '',
+        size: Math.round((compressedUrl.length * 3) / 4),
+      });
+    } else {
+      pass1.push(att);
+    }
+  }
+
+  // Final safety check on total serialized length
+  const totalSerializedChars = JSON.stringify(pass1).length;
+  if (totalSerializedChars <= maxTotalBytesBudget) {
+    return pass1;
+  }
+
+  // Aggressive pass if many photos are combined into a single merged case file
+  const pass2: AttachmentItem[] = [];
+  for (const att of pass1) {
+    const attUrl = att.url || '';
+    if (attUrl.startsWith('data:image/') && attUrl.length > 25000) {
+      const aggressiveUrl = await compressBase64DataUrl(attUrl, 420, 0.36);
+      pass2.push({
+        ...att,
+        url: aggressiveUrl,
+        previewUrl: '',
+        size: Math.round((aggressiveUrl.length * 3) / 4),
+      });
+    } else {
+      pass2.push(att);
+    }
+  }
+  return pass2;
+}
+
+/**
+ * Guarantees a MergedPartyRecord is 100% flat (no nested arrays, no undefined values)
+ * so Firestore never throws a nested-entity or invalid-data error.
+ */
+export function sanitizeMergedPartyForFirestore(party: MergedPartyRecord): MergedPartyRecord {
+  const flatPersonalInfo = sanitizePersonalInfoForFirestore(party?.personalInformation);
+  const flatReportData = sanitizeFlatReportDataForFirestore(party?.reportData);
+
+  return {
+    id: String(party?.id || `party_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`),
+    referenceNumber: String(party?.referenceNumber || ''),
+    reportType: party?.reportType || 'personal-intake',
+    partyLabel: String(party?.partyLabel || 'Merged Client Record'),
+    createdAt: String(party?.createdAt || new Date().toISOString()),
+    mergedAt: String(party?.mergedAt || new Date().toISOString()),
     personalInformation: flatPersonalInfo,
     reportData: flatReportData,
   };
@@ -426,8 +618,21 @@ export async function createReportInFirestore(report: ReportSubmission): Promise
   const path = `reports/${report.id}`;
   try {
     const reportRef = doc(db, 'reports', report.id);
+    const flatPersonalInfo = sanitizePersonalInfoForFirestore(report.personalInformation);
+    const flatReportData = sanitizeFlatReportDataForFirestore(report.reportData);
+    const flatAttachments = await optimizeAttachmentsForFirestoreBudget(
+      normalizeFirestoreArray<AttachmentItem>(report.attachments)
+    );
+    const flatParties = normalizeFirestoreArray<MergedPartyRecord>(report.mergedParties).map(
+      sanitizeMergedPartyForFirestore
+    );
+
     const payload = sanitizeFirestorePayload({
       ...report,
+      personalInformation: flatPersonalInfo,
+      reportData: flatReportData,
+      attachments: flatAttachments,
+      mergedParties: flatParties,
       createdAt: report.createdAt || new Date().toISOString(),
       updatedAt: report.updatedAt || new Date().toISOString(),
       serverCreatedAt: serverTimestamp(),
@@ -456,6 +661,25 @@ export function subscribeToReports(
       const loaded: ReportSubmission[] = [];
       snapshot.forEach((d) => {
         const data = d.data();
+        const sanitizedParties = normalizeFirestoreArray<MergedPartyRecord>(
+          data.mergedParties
+        ).map(sanitizeMergedPartyForFirestore);
+        const isMerged = Boolean(
+          data.isMergedFile ||
+            d.id.startsWith('mrg_') ||
+            String(data.referenceNumber || '').startsWith('MRG-')
+        );
+        const computedMergedTitle =
+          data.mergedFileTitle ||
+          data.reportData?.mergedFileTitle ||
+          (isMerged || sanitizedParties.length > 0
+            ? generateMergedFileTitle(data.personalInformation, sanitizedParties)
+            : undefined);
+        const computedInvestigator =
+          data.mergedByInvestigator ||
+          data.reportData?.mergedByInvestigator ||
+          undefined;
+
         loaded.push({
           id: d.id,
           referenceNumber: data.referenceNumber || '',
@@ -465,19 +689,17 @@ export function subscribeToReports(
           updatedAt: data.updatedAt || new Date().toISOString(),
           completedAt: data.completedAt || null,
           archivedAt: data.archivedAt || null,
-          personalInformation: data.personalInformation || {},
-          reportData: data.reportData || {},
-          mergedParties: normalizeFirestoreArray<MergedPartyRecord>(data.mergedParties).map(
-            sanitizeMergedPartyForFirestore
-          ),
-          isMergedFile: Boolean(
-            data.isMergedFile ||
-              d.id.startsWith('mrg_') ||
-              String(data.referenceNumber || '').startsWith('MRG-')
-          ),
+          personalInformation: sanitizePersonalInfoForFirestore(data.personalInformation),
+          reportData: sanitizeFlatReportDataForFirestore(data.reportData),
+          mergedParties: sanitizedParties,
+          isMergedFile: isMerged,
+          mergedFileTitle: computedMergedTitle,
+          mergedByInvestigator: computedInvestigator,
           sourceReportIds: normalizeFirestoreArray<string>(data.sourceReportIds),
           sourceReferenceNumbers: normalizeFirestoreArray<string>(data.sourceReferenceNumbers),
-          attachments: normalizeFirestoreArray<AttachmentItem>(data.attachments),
+          attachments: normalizeFirestoreArray<AttachmentItem>(data.attachments).map(
+            sanitizeAttachmentForFirestore
+          ),
           adminNotes: normalizeFirestoreArray<AdminNote>(data.adminNotes),
           auditLogs: normalizeFirestoreArray<AuditLogEntry>(data.auditLogs),
           stationOffice: data.stationOffice || 'Investigation & Records Section',
@@ -661,7 +883,9 @@ export async function deleteAttachmentInFirestore(reportId: string, attachmentId
     if (!snap.exists()) return;
 
     const currentAttachments: AttachmentItem[] = normalizeFirestoreArray<AttachmentItem>(snap.data().attachments);
-    const updatedAttachments = currentAttachments.filter((att) => att.id !== attachmentId);
+    const updatedAttachments = await optimizeAttachmentsForFirestoreBudget(
+      currentAttachments.filter((att) => att.id !== attachmentId)
+    );
 
     const now = new Date().toISOString();
     const logEntry: AuditLogEntry = {
@@ -733,6 +957,9 @@ export async function preserveOriginalFilesForLegacyMergesInFirestore(
       }`;
 
       if (!existingIds.has(mergedDocId)) {
+        const optimizedLegAttachments = await optimizeAttachmentsForFirestoreBudget(
+          normalizeFirestoreArray<AttachmentItem>(leg.attachments)
+        );
         const mergedDocRef = doc(db, 'reports', mergedDocId);
         batch.set(
           mergedDocRef,
@@ -747,6 +974,7 @@ export async function preserveOriginalFilesForLegacyMergesInFirestore(
               ...parties.map((p) => p.referenceNumber).filter(Boolean),
             ],
             mergedParties: parties,
+            attachments: optimizedLegAttachments,
             updatedAt: now,
             serverCreatedAt: serverTimestamp(),
             serverUpdatedAt: serverTimestamp(),
@@ -759,8 +987,10 @@ export async function preserveOriginalFilesForLegacyMergesInFirestore(
       for (const mp of parties) {
         const targetId = mp.id && mp.id.startsWith('rep_') ? mp.id : `rep_restored_${mp.id}`;
         if (!existingIds.has(targetId) && !existingRefs.has(mp.referenceNumber)) {
-          const mpAttachments = normalizeFirestoreArray<AttachmentItem>(leg.attachments).filter(
-            (a) => a.partyId === mp.id || a.partyReferenceNumber === mp.referenceNumber
+          const mpAttachments = await optimizeAttachmentsForFirestoreBudget(
+            normalizeFirestoreArray<AttachmentItem>(leg.attachments).filter(
+              (a) => a.partyId === mp.id || a.partyReferenceNumber === mp.referenceNumber
+            )
           );
           const restoredOrig: ReportSubmission = {
             id: targetId,
@@ -802,14 +1032,14 @@ export async function preserveOriginalFilesForLegacyMergesInFirestore(
       }
 
       // Restore primary document back to pure standalone Original File
-      const primaryOnlyAttachments = normalizeFirestoreArray<AttachmentItem>(
-        leg.attachments
-      ).filter(
-        (a) =>
-          !a.partyId ||
-          a.partyId === 'PRIMARY' ||
-          a.partyId === leg.id ||
-          a.partyReferenceNumber === leg.referenceNumber
+      const primaryOnlyAttachments = await optimizeAttachmentsForFirestoreBudget(
+        normalizeFirestoreArray<AttachmentItem>(leg.attachments).filter(
+          (a) =>
+            !a.partyId ||
+            a.partyId === 'PRIMARY' ||
+            a.partyId === leg.id ||
+            a.partyReferenceNumber === leg.referenceNumber
+        )
       );
 
       batch.update(doc(db, 'reports', leg.id), {
@@ -843,10 +1073,13 @@ export async function mergeReportsIntoSingleFileInFirestore(
   primaryReportId: string,
   secondaryReportIds: string[],
   _deleteMergedOriginals: boolean,
-  adminEmail: string
+  adminEmail: string,
+  mergedByInvestigator: string = 'Kim Edsel Saycon'
 ): Promise<ReportSubmission | null> {
   const path = `reports/${primaryReportId}`;
   try {
+    const cleanInvestigator =
+      mergedByInvestigator === 'Bienne Care' ? 'Bienne Care' : 'Kim Edsel Saycon';
     const cleanSecondaryIds = Array.from(new Set(secondaryReportIds)).filter(
       (id) => id && id !== primaryReportId
     );
@@ -1003,6 +1236,26 @@ export async function mergeReportsIntoSingleFileInFirestore(
 
     const finalSourceIds = Array.from(sourceReportIds);
     const finalSourceRefs = Array.from(sourceReferenceNumbers);
+    const autoGeneratedMergedTitle = generateMergedFileTitle(
+      primaryData.personalInformation,
+      combinedMergedParties
+    );
+    // Optimize & deduplicate attachments so combined multi-party documents never exceed Firestore's 1MB limit
+    const sanitizedAttachments = await optimizeAttachmentsForFirestoreBudget(
+      combinedAttachments,
+      620000
+    );
+    const trimmedAuditLogs = combinedAuditLogs.slice(-40);
+    const flatPrimaryPersonalInfo = sanitizePersonalInfoForFirestore(
+      primaryData.personalInformation
+    );
+    const flatPrimaryReportData = {
+      ...sanitizeFlatReportDataForFirestore(primaryData.reportData),
+      mergedFileTitle: autoGeneratedMergedTitle,
+      mergedByInvestigator: cleanInvestigator,
+      investigatorOnCase:
+        primaryData.reportData?.investigatorOnCase || cleanInvestigator,
+    };
 
     // If primaryReportId is already a Merged File, update it in place
     if (isAlreadyMergedDoc) {
@@ -1014,18 +1267,21 @@ export async function mergeReportsIntoSingleFileInFirestore(
         action: 'UPDATE_REPORT',
         details: `Added ${absorbedRefNumbers.length} original client record(s) [${absorbedRefNumbers.join(
           ', '
-        )}] into Merged File #${primaryData.referenceNumber} (all original files preserved)`,
+        )}] into Merged File "${autoGeneratedMergedTitle}" (#${primaryData.referenceNumber}) by Investigator ${cleanInvestigator}`,
       };
-      combinedAuditLogs.push(mergeLog);
+      const updatedLogs = [...trimmedAuditLogs, mergeLog];
 
       const updatedPayload = sanitizeFirestorePayload({
         isMergedFile: true,
+        mergedFileTitle: autoGeneratedMergedTitle,
+        mergedByInvestigator: cleanInvestigator,
+        reportData: flatPrimaryReportData,
         sourceReportIds: finalSourceIds,
         sourceReferenceNumbers: finalSourceRefs,
         mergedParties: combinedMergedParties,
-        attachments: combinedAttachments,
+        attachments: sanitizedAttachments,
         adminNotes: combinedNotes,
-        auditLogs: combinedAuditLogs,
+        auditLogs: updatedLogs,
         updatedAt: now,
         serverUpdatedAt: serverTimestamp(),
       });
@@ -1036,22 +1292,24 @@ export async function mergeReportsIntoSingleFileInFirestore(
       return {
         id: primaryReportId,
         referenceNumber: primaryData.referenceNumber || '',
-        reportType: primaryData.reportType || 'personal-intake',
+        reportType: primaryData.reportType || 'vehicular-incident',
         status: primaryData.status || 'NEW',
         createdAt: primaryData.createdAt || now,
         updatedAt: now,
         completedAt: primaryData.completedAt || null,
         archivedAt: primaryData.archivedAt || null,
-        personalInformation: primaryData.personalInformation || {},
-        reportData: primaryData.reportData || {},
+        personalInformation: flatPrimaryPersonalInfo,
+        reportData: flatPrimaryReportData,
         mergedParties: combinedMergedParties,
         isMergedFile: true,
+        mergedFileTitle: autoGeneratedMergedTitle,
+        mergedByInvestigator: cleanInvestigator,
         sourceReportIds: finalSourceIds,
         sourceReferenceNumbers: finalSourceRefs,
-        attachments: combinedAttachments,
+        attachments: sanitizedAttachments,
         adminNotes: combinedNotes,
-        auditLogs: combinedAuditLogs,
-        stationOffice: primaryData.stationOffice || 'Investigation & Records Section',
+        auditLogs: updatedLogs,
+        stationOffice: primaryData.stationOffice || 'Traffic Enforcement Unit',
       };
     }
 
@@ -1074,30 +1332,32 @@ export async function mergeReportsIntoSingleFileInFirestore(
       adminUserId: auth.currentUser?.uid || 'OFFICER_01',
       adminEmail,
       action: 'UPDATE_REPORT',
-      details: `Created Merged File #${newMergedRefNumber} combining Original Files [${finalSourceRefs.join(
+      details: `Created Merged File "${autoGeneratedMergedTitle}" (#${newMergedRefNumber}) combining Original Files [${finalSourceRefs.join(
         ', '
-      )}] by ${adminEmail}. All original files remain intact.`,
+      )}] by Investigator ${cleanInvestigator} (${adminEmail}). All original files remain intact.`,
     };
 
     const newMergedReport: ReportSubmission = {
       id: newMergedId,
       referenceNumber: newMergedRefNumber,
-      reportType: primaryData.reportType || 'vehicular-incident',
+      reportType: 'vehicular-incident',
       status: primaryData.status || 'NEW',
       createdAt: now,
       updatedAt: now,
       completedAt: primaryData.completedAt || null,
       archivedAt: primaryData.archivedAt || null,
-      personalInformation: primaryData.personalInformation || {},
-      reportData: primaryData.reportData || {},
+      personalInformation: flatPrimaryPersonalInfo,
+      reportData: flatPrimaryReportData,
       mergedParties: combinedMergedParties,
       isMergedFile: true,
+      mergedFileTitle: autoGeneratedMergedTitle,
+      mergedByInvestigator: cleanInvestigator,
       sourceReportIds: finalSourceIds,
       sourceReferenceNumbers: finalSourceRefs,
-      attachments: combinedAttachments,
+      attachments: sanitizedAttachments,
       adminNotes: combinedNotes,
-      auditLogs: [...combinedAuditLogs, creationLog],
-      stationOffice: primaryData.stationOffice || 'Investigation & Records Section',
+      auditLogs: [...trimmedAuditLogs, creationLog],
+      stationOffice: primaryData.stationOffice || 'Traffic Enforcement Unit',
     };
 
     const newMergedRef = doc(db, 'reports', newMergedId);
@@ -1130,6 +1390,7 @@ export async function updateCompleteReportRecordInFirestore(
     attachments?: AttachmentItem[];
     reportType?: ReportSubmission['reportType'];
     stationOffice?: string;
+    mergedByInvestigator?: string;
   },
   adminEmail: string,
   auditDetails: string = 'Record details updated via full CRUD editor'
@@ -1155,30 +1416,52 @@ export async function updateCompleteReportRecordInFirestore(
     };
 
     if (updates.personalInformation !== undefined) {
-      payload.personalInformation = sanitizeFirestorePayload(updates.personalInformation);
+      payload.personalInformation = sanitizePersonalInfoForFirestore(updates.personalInformation);
     }
     if (updates.reportData !== undefined) {
-      const cleanReportData: Record<string, any> = {};
-      for (const [k, v] of Object.entries(updates.reportData)) {
-        if (v !== undefined && !Array.isArray(v)) {
-          cleanReportData[k] = v;
-        }
-      }
-      payload.reportData = sanitizeFirestorePayload(cleanReportData);
+      payload.reportData = sanitizeFlatReportDataForFirestore(updates.reportData);
     }
     if (updates.mergedParties !== undefined) {
-      payload.mergedParties = sanitizeFirestorePayload(
-        updates.mergedParties.map(sanitizeMergedPartyForFirestore)
-      );
+      payload.mergedParties = updates.mergedParties.map(sanitizeMergedPartyForFirestore);
     }
     if (updates.attachments !== undefined) {
-      payload.attachments = sanitizeFirestorePayload(updates.attachments);
+      payload.attachments = await optimizeAttachmentsForFirestoreBudget(updates.attachments);
     }
     if (updates.reportType !== undefined) {
       payload.reportType = updates.reportType;
     }
     if (updates.stationOffice !== undefined) {
       payload.stationOffice = updates.stationOffice;
+    }
+    if (updates.mergedByInvestigator !== undefined) {
+      const validInv =
+        updates.mergedByInvestigator === 'Bienne Care' ? 'Bienne Care' : 'Kim Edsel Saycon';
+      payload.mergedByInvestigator = validInv;
+    }
+
+    // If this is a merged file or has mergedParties, keep mergedFileTitle automatically synchronized
+    if (updates.personalInformation !== undefined || updates.mergedParties !== undefined) {
+      const snap = await getDoc(reportRef);
+      if (snap.exists()) {
+        const cur = snap.data();
+        const isMerged = Boolean(
+          cur.isMergedFile ||
+            reportId.startsWith('mrg_') ||
+            String(cur.referenceNumber || '').startsWith('MRG-') ||
+            (updates.mergedParties && updates.mergedParties.length > 0)
+        );
+        if (isMerged) {
+          const nextPi =
+            updates.personalInformation !== undefined
+              ? payload.personalInformation
+              : cur.personalInformation;
+          const nextParties =
+            updates.mergedParties !== undefined
+              ? payload.mergedParties
+              : normalizeFirestoreArray<MergedPartyRecord>(cur.mergedParties);
+          payload.mergedFileTitle = generateMergedFileTitle(nextPi, nextParties);
+        }
+      }
     }
 
     await updateDoc(reportRef, payload);
@@ -1210,12 +1493,19 @@ export async function addAttachmentsToReportInFirestore(
       const safeId = existingIds.has(att.id)
         ? `${att.id}_${Math.random().toString(36).substring(2, 6)}`
         : att.id;
-      mergedAttachments.push({
-        ...att,
-        id: safeId,
-      });
+      mergedAttachments.push(
+        sanitizeAttachmentForFirestore({
+          ...att,
+          id: safeId,
+        })
+      );
       existingIds.add(safeId);
     }
+
+    const optimizedMergedAttachments = await optimizeAttachmentsForFirestoreBudget(
+      mergedAttachments,
+      620000
+    );
 
     const now = new Date().toISOString();
     const logEntry: AuditLogEntry = {
@@ -1228,7 +1518,7 @@ export async function addAttachmentsToReportInFirestore(
     };
 
     await updateDoc(reportRef, {
-      attachments: sanitizeFirestorePayload(mergedAttachments),
+      attachments: sanitizeFirestorePayload(optimizedMergedAttachments),
       updatedAt: now,
       serverUpdatedAt: serverTimestamp(),
       auditLogs: arrayUnion(logEntry),
@@ -1261,8 +1551,12 @@ export async function unmergePartyToStandaloneReportInFirestore(
 
     const remainingParties = currentParties.filter((p) => p.id !== partyId);
     const allAttachments = normalizeFirestoreArray<AttachmentItem>(data.attachments);
-    const partyAttachments = allAttachments.filter((a) => a.partyId === partyId);
-    const remainingAttachments = allAttachments.filter((a) => a.partyId !== partyId);
+    const partyAttachments = await optimizeAttachmentsForFirestoreBudget(
+      allAttachments.filter((a) => a.partyId === partyId)
+    );
+    const remainingAttachments = await optimizeAttachmentsForFirestoreBudget(
+      allAttachments.filter((a) => a.partyId !== partyId)
+    );
 
     const now = new Date().toISOString();
     const standaloneId = targetParty.id.startsWith('rep_')

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { AttachmentItem } from '../../types/reports';
+import { AttachmentItem, DocumentCategoryType } from '../../types/reports';
 import { uploadToCloudinary, buildClientCloudinaryFolder } from '../../services/cloudinary';
+import { getDocumentCategoryLabel } from '../../utils/formatters';
 import {
   UploadCloud,
   File as FileIcon,
@@ -23,6 +24,13 @@ interface FileUploadDropzoneProps {
   clientName?: string;
   maxFiles?: number;
   maxSizeMB?: number;
+  documentCategory?: DocumentCategoryType;
+  documentCategoryLabel?: string;
+  filterByCategory?: boolean;
+  hideFolderBanner?: boolean;
+  customTitleEn?: string;
+  customTitleFil?: string;
+  uploadButtonLabel?: string;
 }
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
@@ -36,7 +44,19 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
   clientName,
   maxFiles = 5,
   maxSizeMB = 10,
+  documentCategory = 'VALID_ID',
+  documentCategoryLabel,
+  filterByCategory = false,
+  hideFolderBanner = false,
+  customTitleEn,
+  customTitleFil,
+  uploadButtonLabel,
 }) => {
+  const resolvedCategoryLabel =
+    documentCategoryLabel || getDocumentCategoryLabel(documentCategory);
+  const displayedAttachments = filterByCategory
+    ? attachments.filter((item) => (item.documentCategory || 'VALID_ID') === documentCategory)
+    : attachments;
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -68,8 +88,8 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
 
   const startLiveCamera = async (preferredFacing: 'environment' | 'user' = facingMode) => {
     setErrorMsg(null);
-    if (attachments.length >= maxFiles) {
-      setErrorMsg(`Maximum ${maxFiles} attachments allowed.`);
+    if (displayedAttachments.length >= maxFiles) {
+      setErrorMsg(`Maximum ${maxFiles} file(s) allowed for ${resolvedCategoryLabel}.`);
       return;
     }
 
@@ -137,9 +157,14 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
           return;
         }
         const timestamp = Date.now();
-        const capturedFile = new window.File([blob], `Live_ID_Capture_${timestamp}.jpg`, {
-          type: 'image/jpeg',
-        });
+        const catPrefix = documentCategory === 'OR' ? 'OR' : documentCategory === 'CR' ? 'CR' : 'ID';
+        const capturedFile = new window.File(
+          [blob],
+          `Live_${catPrefix}_Capture_${timestamp}.jpg`,
+          {
+            type: 'image/jpeg',
+          }
+        );
         handleCloseCamera();
         await processFiles([capturedFile], 'live_capture');
       },
@@ -154,8 +179,8 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
   ) => {
     setErrorMsg(null);
 
-    if (attachments.length + files.length > maxFiles) {
-      setErrorMsg(`Maximum ${maxFiles} attachments allowed.`);
+    if (displayedAttachments.length + files.length > maxFiles) {
+      setErrorMsg(`Maximum ${maxFiles} file(s) allowed for ${resolvedCategoryLabel}.`);
       return;
     }
 
@@ -195,15 +220,20 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
 
         newItems.push({
           id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          name: file.name,
-          size: file.size,
-          type: file.type || 'image/jpeg',
-          url: cloudinaryResult.secure_url,
-          previewUrl: cloudinaryResult.secure_url,
-          cloudinaryFolder: cloudinaryResult.folder || clientFolder,
-          publicId: cloudinaryResult.public_id,
+          name: String(file.name || `${documentCategory}_${Date.now()}.jpg`).trim(),
+          size: Number(file.size) || 0,
+          type: String(file.type || 'image/jpeg').trim(),
+          url: String(cloudinaryResult.secure_url || '').trim(),
+          previewUrl: '',
+          cloudinaryFolder: String(cloudinaryResult.folder || clientFolder).trim(),
+          publicId: String(cloudinaryResult.public_id || '').trim(),
           sourceType,
+          documentCategory,
+          documentCategoryLabel: resolvedCategoryLabel,
           uploadedAt: new Date().toISOString(),
+          partyId: 'PRIMARY',
+          partyLabel: clientName ? `Party 1 (Primary): ${clientName.replace(/_/g, ' ')}` : 'Party 1 (Primary)',
+          partyReferenceNumber: String(referenceNumber || '').trim(),
         });
       } catch (err) {
         console.error('Upload failed', err);
@@ -244,15 +274,17 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
   return (
     <div className="space-y-4">
       {/* Dedicated Per-Client Cloudinary Folder Badge */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[11px] text-slate-600 bg-blue-50/70 px-3.5 py-2 rounded-xl border border-blue-200/80">
-        <span className="flex items-center gap-1.5 font-bold text-blue-950">
-          <FolderCheck className="w-4 h-4 text-blue-700 shrink-0" />
-          <span>Dedicated Client Cloudinary Folder (Isolated per Client):</span>
-        </span>
-        <span className="font-mono text-[10px] sm:text-[11px] font-semibold text-blue-900 bg-white px-2 py-0.5 rounded border border-blue-200 truncate">
-          {clientFolder}
-        </span>
-      </div>
+      {!hideFolderBanner && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[11px] text-slate-600 bg-blue-50/70 px-3.5 py-2 rounded-xl border border-blue-200/80">
+          <span className="flex items-center gap-1.5 font-bold text-blue-950">
+            <FolderCheck className="w-4 h-4 text-blue-700 shrink-0" />
+            <span>Dedicated Client Cloudinary Folder (Isolated per Client):</span>
+          </span>
+          <span className="font-mono text-[10px] sm:text-[11px] font-semibold text-blue-900 bg-white px-2 py-0.5 rounded border border-blue-200 truncate">
+            {clientFolder}
+          </span>
+        </div>
+      )}
 
       {/* Hidden Fallback Mobile Camera Input */}
       <input
@@ -370,13 +402,14 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
               </div>
 
               <p className="text-sm font-extrabold text-slate-900">
-                Optional: Take a Live Photo or Upload Valid ID / Photo
+                {customTitleEn || `Optional: Take a Live Photo or Upload ${resolvedCategoryLabel}`}
               </p>
               <p className="text-xs font-semibold text-blue-900 mt-0.5">
-                (Opsyonal: Kuhanan ng Larawan Ngayon [Live Capture] o Mag-upload ng ID)
+                {customTitleFil ||
+                  '(Opsyonal: Kuhanan ng Larawan Ngayon [Live Capture] o Mag-upload ng File)'}
               </p>
               <p className="text-[11px] text-slate-500 mt-1.5 max-w-lg mx-auto">
-                Kung walang naka-save na ID sa telepono, maaaring gamitin ang <strong>Live Camera Capture</strong> o mag-upload mula sa Gallery. Awtomatikong ise-save sa sariling Cloudinary folder ng kliyente.
+                Maaaring gamitin ang <strong>Live Camera Capture</strong> o mag-upload mula sa Gallery/Files. Awtomatikong ise-save sa sariling Cloudinary folder ng kliyente nang walang nested data error.
               </p>
 
               <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -394,7 +427,7 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
                 {/* Option B: Upload Existing File */}
                 <label className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-900 hover:bg-blue-950 text-white text-xs font-extrabold rounded-xl cursor-pointer transition-colors shadow-sm">
                   <UploadCloud className="w-4 h-4" />
-                  <span>Upload ID / Photo (Pumili ng File)</span>
+                  <span>{uploadButtonLabel || `Upload ${resolvedCategoryLabel}`}</span>
                   <input
                     type="file"
                     multiple
@@ -418,17 +451,19 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
       )}
 
       {/* Attachment List */}
-      {attachments.length > 0 && (
+      {displayedAttachments.length > 0 && (
         <div className="space-y-2.5">
           <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
-            <span>Attached Client ID / Photos ({attachments.length}/{maxFiles})</span>
+            <span>
+              Attached {resolvedCategoryLabel} ({displayedAttachments.length}/{maxFiles})
+            </span>
             <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
               <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Stored in Client Cloudinary Folder</span>
+              <span>Validated Flat Record in Cloudinary</span>
             </span>
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {attachments.map((item) => (
+            {displayedAttachments.map((item) => (
               <div
                 key={item.id}
                 className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl shadow-2xs"
@@ -450,7 +485,11 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
                     </div>
                   )}
                   <div className="overflow-hidden space-y-0.5">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">
+                        {item.documentCategoryLabel ||
+                          getDocumentCategoryLabel(item.documentCategory)}
+                      </span>
                       <span
                         className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
                           item.sourceType === 'live_capture'

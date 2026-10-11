@@ -226,19 +226,24 @@ app.post('/api/intake', rateLimiter(30, 60000), async (req, res) => {
     const address = String(safeInfo.address || 'Bauan, Batangas').trim().substring(0, 1000);
     const contactNumber = String(safeInfo.contactNumber || 'None').trim().substring(0, 50);
 
-    // Enforce limits
-    const safeAttachments = Array.isArray(attachments) ? attachments.slice(0, 10) : []; // Max 10 files
+    // Enforce limits and flat non-nested structure
+    const safeAttachments = Array.isArray(attachments) ? attachments.slice(0, 15) : []; // Max 15 files
     const validatedAttachments = safeAttachments.map((att: any) => ({
       id: String(att.id || `file_${Date.now()}_${Math.random()}`),
       name: String(att.name || 'attachment').substring(0, 255),
-      size: Number(att.size || att.bytes || 0),
+      size: Number(att.size || att.bytes || 0) || 0,
       type: String(att.type || att.format || 'image/jpeg').substring(0, 60),
       url: String(att.url || att.previewUrl || ''),
-      previewUrl: String(att.previewUrl || att.url || ''),
+      previewUrl: '',
       cloudinaryFolder: String(att.cloudinaryFolder || '').substring(0, 255),
       publicId: String(att.publicId || '').substring(0, 255),
       sourceType: att.sourceType === 'live_capture' ? 'live_capture' : 'upload',
+      documentCategory: String(att.documentCategory || 'VALID_ID').substring(0, 40),
+      documentCategoryLabel: String(att.documentCategoryLabel || 'Valid ID / Photo').substring(0, 80),
       uploadedAt: String(att.uploadedAt || new Date().toISOString()),
+      partyId: String(att.partyId || 'PRIMARY').substring(0, 80),
+      partyLabel: String(att.partyLabel || '').substring(0, 160),
+      partyReferenceNumber: String(att.partyReferenceNumber || '').substring(0, 80),
     }));
 
     // Server-side generation or preservation of tracking information
@@ -379,10 +384,11 @@ app.patch('/api/admin/reports/:id', adminOnlyMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Record not found.' });
     }
 
-    const { reportData, personalInformation, mergedParties, attachments, reportType, stationOffice } = req.body;
+    const { reportData, personalInformation, mergedParties, mergedFileTitle, attachments, reportType, stationOffice } = req.body;
     if (reportData !== undefined) target.reportData = reportData || {};
     if (personalInformation !== undefined) target.personalInformation = personalInformation || {};
     if (mergedParties !== undefined) target.mergedParties = Array.isArray(mergedParties) ? mergedParties : [];
+    if (mergedFileTitle !== undefined) target.mergedFileTitle = String(mergedFileTitle || '');
     if (attachments !== undefined) target.attachments = Array.isArray(attachments) ? attachments : [];
     if (reportType !== undefined) target.reportType = reportType;
     if (stationOffice !== undefined) target.stationOffice = stationOffice;
