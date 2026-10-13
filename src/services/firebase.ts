@@ -1086,7 +1086,7 @@ export async function mergeReportsIntoSingleFileInFirestore(
   secondaryReportIds: string[],
   _deleteMergedOriginals: boolean,
   adminEmail: string,
-  mergedByInvestigator: string = 'Team 1 — Saycon & Care (Kim Edsel Saycon & Bienne Care)'
+  mergedByInvestigator: string = 'Team 1 — Sayco & Care (Kim Edsel Sayco & Bienne Care)'
 ): Promise<ReportSubmission | null> {
   const path = `reports/${primaryReportId}`;
   try {

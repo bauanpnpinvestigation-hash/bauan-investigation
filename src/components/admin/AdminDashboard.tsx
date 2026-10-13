@@ -198,7 +198,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const validation = validateAndNormalizeInvestigator(selectedMergeInvestigator);
     if (!selectedMergeInvestigator || !validation.isValid) {
       setMergeInvestigatorError(
-        'Validation Required: Please choose Team 1 (Saycon & Care) or Team 2 (Alzate & Serwelas) with their investigator name before merging.'
+        'Validation Required: Please choose Team 1 (Sayco & Care) or Team 2 (Alzate & Serwelas) with their investigator name before merging.'
       );
       return;
     }
@@ -1575,7 +1575,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Investigator Team & Name Validation Section (Team 1: Saycon & Care | Team 2: Alzate & Serwelas) */}
+              {/* Investigator Team & Name Validation Section (Team 1: Sayco & Care | Team 2: Alzate & Serwelas) */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <label className="block font-black text-slate-900 text-xs">

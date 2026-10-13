@@ -367,7 +367,7 @@ export default function App() {
     primaryReportId: string,
     secondaryReportIds: string[],
     deleteMergedOriginals: boolean = false,
-    mergedByInvestigator: string = 'Team 1 — Saycon & Care (Kim Edsel Saycon & Bienne Care)'
+    mergedByInvestigator: string = 'Team 1 — Sayco & Care (Kim Edsel Sayco & Bienne Care)'
   ) => {
     try {
       const merged = await mergeReportsIntoSingleFileInFirestore(

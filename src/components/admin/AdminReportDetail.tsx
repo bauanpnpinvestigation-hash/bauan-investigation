@@ -666,7 +666,7 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
     const validation = validateAndNormalizeInvestigator(selectedMergeInvestigator);
     if (!selectedMergeInvestigator || !validation.isValid) {
       setMergeInvestigatorError(
-        'Validation Required: Please choose Team 1 (Saycon & Care) or Team 2 (Alzate & Serwelas) with their investigator name before merging.'
+        'Validation Required: Please choose Team 1 (Sayco & Care) or Team 2 (Alzate & Serwelas) with their investigator name before merging.'
       );
       return;
     }
