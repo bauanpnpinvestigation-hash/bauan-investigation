@@ -226,20 +226,24 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
   const [deleteOriginalsOnMerge, setDeleteOriginalsOnMerge] = useState(true);
   const [isMergingRecords, setIsMergingRecords] = useState(false);
 
-  // Conflict-Free Photo & OR/CR Upload & Live Camera Capture State for Single/Combined File
+  // Conflict-Free Photo & OR/CR/Evidence Upload & Live Camera Capture State for Single/Combined File
   const [showPhotoUploadPanel, setShowPhotoUploadPanel] = useState(false);
   const [selectedPhotoPartyId, setSelectedPhotoPartyId] = useState<string>('PRIMARY');
   const [selectedDocumentCategory, setSelectedDocumentCategory] =
-    useState<DocumentCategoryType>('VALID_ID');
+    useState<DocumentCategoryType>('EVIDENCE');
   const [activeAttachmentFilter, setActiveAttachmentFilter] = useState<
     'ALL' | 'OR' | 'CR' | 'VALID_ID' | 'SCENE_PHOTO' | 'EVIDENCE'
   >('ALL');
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [uploadProgressStatus, setUploadProgressStatus] = useState<string | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const directFileInputRef = useRef<HTMLInputElement | null>(null);
+  const activeUploadCategoryRef = useRef<DocumentCategoryType>('EVIDENCE');
+  const activeTargetPartyIdRef = useRef<string>('PRIMARY');
 
   // Google Drive Integration for this specific Case
   const [driveFiles, setDriveFiles] = useState<DriveRecordFile[]>([]);
@@ -690,21 +694,41 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
   // CONFLICT-FREE PHOTO UPLOAD & LIVE CAMERA CAPTURE TO FILE
   // ==========================================
 
+  const triggerDirectUpload = (
+    category: DocumentCategoryType,
+    partyId: string = selectedPhotoPartyId || 'PRIMARY'
+  ) => {
+    activeUploadCategoryRef.current = category;
+    activeTargetPartyIdRef.current = partyId;
+    setSelectedDocumentCategory(category);
+    setSelectedPhotoPartyId(partyId);
+    if (directFileInputRef.current) {
+      directFileInputRef.current.value = '';
+      directFileInputRef.current.click();
+    }
+  };
+
   const uploadFilesForSelectedParty = async (
     files: File[],
     sourceType: 'upload' | 'live_capture',
-    overrideCategory?: DocumentCategoryType
+    overrideCategory?: DocumentCategoryType,
+    overridePartyId?: string
   ) => {
     if (!files.length) return;
     setIsUploadingPhotos(true);
     try {
+      const targetPartyId = overridePartyId || selectedPhotoPartyId || 'PRIMARY';
       const targetParty =
-        partyOptions.find((p) => p.id === selectedPhotoPartyId) || partyOptions[0];
-      const docCategory = overrideCategory || selectedDocumentCategory || 'VALID_ID';
+        partyOptions.find((p) => p.id === targetPartyId) || partyOptions[0];
+      const docCategory = overrideCategory || selectedDocumentCategory || 'EVIDENCE';
       const docCategoryLabel = getDocumentCategoryLabel(docCategory);
       const uploadedItems: AttachmentItem[] = [];
 
-      for (const file of files) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setUploadProgressStatus(
+          `Uploading file ${i + 1} of ${files.length} (${file.name || docCategoryLabel}) to Cloudinary...`
+        );
         const result = await uploadToCloudinary(file, {
           reportType: targetParty.reportType,
           referenceNumber: targetParty.refNumber,
@@ -730,6 +754,8 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
         });
       }
 
+      setUploadProgressStatus(`Saving ${uploadedItems.length} file(s) to case file...`);
+
       if (onUploadAttachments) {
         await onUploadAttachments(report.id, uploadedItems);
       } else if (onUpdateCompleteReport) {
@@ -741,12 +767,15 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
       }
 
       showTempSuccess(
-        `Uploaded ${uploadedItems.length} ${docCategoryLabel} file(s) to ${targetParty.label} (flat & validated)!`
+        `✓ Uploaded ${uploadedItems.length} ${docCategoryLabel} file(s) to ${targetParty.label} successfully!`
       );
-    } catch (err) {
+      setShowPhotoUploadPanel(false);
+    } catch (err: any) {
       console.error('[Photo Upload Error]:', err);
+      showTempSuccess(`Upload failed: ${err.message || 'Please check connection and try again'}`);
     } finally {
       setIsUploadingPhotos(false);
+      setUploadProgressStatus(null);
     }
   };
 
@@ -754,7 +783,19 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
     const filesArray = Array.from(fileList);
-    await uploadFilesForSelectedParty(filesArray, 'upload');
+    const category = selectedDocumentCategory || 'EVIDENCE';
+    const partyId = selectedPhotoPartyId || 'PRIMARY';
+    await uploadFilesForSelectedParty(filesArray, 'upload', category, partyId);
+    e.target.value = '';
+  };
+
+  const handleDirectFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+    const filesArray = Array.from(fileList);
+    const category = activeUploadCategoryRef.current || selectedDocumentCategory || 'EVIDENCE';
+    const partyId = activeTargetPartyIdRef.current || selectedPhotoPartyId || 'PRIMARY';
+    await uploadFilesForSelectedParty(filesArray, 'upload', category, partyId);
     e.target.value = '';
   };
 
@@ -875,12 +916,23 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
 
           <button
             type="button"
-            onClick={() => setShowPhotoUploadPanel((prev) => !prev)}
+            disabled={isUploadingPhotos}
+            onClick={() => triggerDirectUpload('EVIDENCE')}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-900 hover:bg-indigo-950 disabled:opacity-50 text-white rounded-lg text-xs font-extrabold transition-colors shadow-xs cursor-pointer"
+            title="Browse and upload case evidence directly from your device"
+          >
+            <UploadCloud className="w-4 h-4 text-amber-300" />
+            <span>Upload Evidence</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowPhotoUploadPanel(true)}
             className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-800 hover:bg-blue-900 text-white rounded-lg text-xs font-extrabold transition-colors shadow-xs cursor-pointer"
-            title="Upload or capture photos directly into this file"
+            title="Open camera or full upload center"
           >
             <Camera className="w-4 h-4 text-amber-300" />
-            <span>Upload Photo to File</span>
+            <span>Camera / Upload Center</span>
           </button>
 
           <CopyReportButton
@@ -1156,144 +1208,185 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
         </div>
       )}
 
-      {/* Quick Conflict-Free Photo Upload Panel (When Toggled from Top Bar) */}
+      {/* Universal Always-Mounted File Input for Instant 1-Click Uploads */}
+      <input
+        ref={directFileInputRef}
+        type="file"
+        accept="image/*,.pdf,.doc,.docx"
+        multiple
+        onChange={handleDirectFileInputChange}
+        className="hidden"
+      />
+
+      {/* Quick Conflict-Free Photo & Evidence Upload Modal (Accessible From Anywhere on Page) */}
       {showPhotoUploadPanel && (
-        <div className="bg-white rounded-xl border-2 border-blue-700 shadow-lg overflow-hidden animate-fadeIn">
-          <div className="px-5 py-3.5 bg-blue-950 text-white flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Camera className="w-4 h-4 text-amber-300" />
-              <div>
-                <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider">
-                  Upload or Capture Photos to Case File #{report.referenceNumber}
-                </h3>
-                <p className="text-[11px] text-blue-200">
-                  Conflict-free top-level storage • Assign photo to any Party in this combined file
-                </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs overflow-y-auto animate-fadeIn">
+          <div className="bg-white w-full max-w-2xl rounded-2xl border-2 border-blue-700 shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col">
+            <div className="px-5 py-3.5 bg-blue-950 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <Camera className="w-5 h-5 text-amber-300" />
+                <div>
+                  <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider">
+                    Upload Files &amp; Photos — Case #{report.referenceNumber}
+                  </h3>
+                  <p className="text-[11px] text-blue-200">
+                    Direct Cloudinary storage • Evidence, OR, CR, IDs, Scene photos
+                  </p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  stopLiveCamera();
+                  setShowPhotoUploadPanel(false);
+                }}
+                className="p-1.5 text-blue-200 hover:text-white hover:bg-blue-900 rounded-lg cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                stopLiveCamera();
-                setShowPhotoUploadPanel(false);
-              }}
-              className="p-1 text-blue-200 hover:text-white rounded-lg cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
 
-          <div className="p-5 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-              <div>
-                <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-1.5">
-                  1. Assign To Which Client / Party?
-                </label>
-                <select
-                  value={selectedPhotoPartyId}
-                  onChange={(e) => setSelectedPhotoPartyId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm font-bold text-slate-900 focus:outline-hidden focus:border-blue-600"
-                >
-                  {partyOptions.map((po) => (
-                    <option key={po.id} value={po.id}>
-                      {po.label}
-                    </option>
-                  ))}
-                </select>
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-1.5">
+                    1. Assign To Which Client / Party?
+                  </label>
+                  <select
+                    value={selectedPhotoPartyId}
+                    onChange={(e) => setSelectedPhotoPartyId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm font-bold text-slate-900 focus:outline-hidden focus:border-blue-600"
+                  >
+                    {partyOptions.map((po) => (
+                      <option key={po.id} value={po.id}>
+                        {po.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-1.5">
+                    2. Document Category (OR / CR / Evidence / ID / Photo)
+                  </label>
+                  <select
+                    value={selectedDocumentCategory}
+                    onChange={(e) =>
+                      setSelectedDocumentCategory(e.target.value as DocumentCategoryType)
+                    }
+                    className="w-full px-3.5 py-2.5 bg-amber-50/70 border border-amber-300 rounded-xl text-xs sm:text-sm font-black text-slate-900 focus:outline-hidden focus:border-amber-600"
+                  >
+                    <option value="EVIDENCE">Case Evidence File / Photo</option>
+                    <option value="OR">Official Receipt (OR)</option>
+                    <option value="CR">Certificate of Registration (CR)</option>
+                    <option value="VALID_ID">Valid ID / Driver&apos;s License</option>
+                    <option value="SCENE_PHOTO">Vehicle / Incident Scene Photo</option>
+                    <option value="OTHER">Other Related Document</option>
+                  </select>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-1.5">
-                  2. Document Category (OR / CR / Evidence / ID / Photo)
-                </label>
-                <select
-                  value={selectedDocumentCategory}
-                  onChange={(e) =>
-                    setSelectedDocumentCategory(e.target.value as DocumentCategoryType)
-                  }
-                  className="w-full px-3.5 py-2.5 bg-amber-50/70 border border-amber-300 rounded-xl text-xs sm:text-sm font-black text-slate-900 focus:outline-hidden focus:border-amber-600"
-                >
-                  <option value="OR">Official Receipt (OR)</option>
-                  <option value="CR">Certificate of Registration (CR)</option>
-                  <option value="EVIDENCE">Case Evidence File / Photo</option>
-                  <option value="VALID_ID">Valid ID / Driver&apos;s License</option>
-                  <option value="SCENE_PHOTO">Vehicle / Incident Scene Photo</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2.5 flex-wrap">
+              {/* Upload Dropzone / Action Area */}
+              <div className="border-2 border-dashed border-blue-300 bg-blue-50/40 rounded-xl p-5 text-center space-y-3">
                 <input
                   ref={photoInputRef}
                   type="file"
-                  accept="image/*,.pdf"
+                  accept="image/*,.pdf,.doc,.docx"
                   multiple
                   onChange={handleFileInputChange}
                   className="hidden"
                 />
-                <button
-                  type="button"
-                  disabled={isUploadingPhotos}
-                  onClick={() => photoInputRef.current?.click()}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-900 hover:bg-blue-950 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-sm cursor-pointer transition-colors"
-                >
-                  <UploadCloud className="w-4 h-4 text-amber-300" />
-                  <span>
-                    {isUploadingPhotos
-                      ? 'Uploading to Cloudinary...'
-                      : `Upload ${getDocumentCategoryLabel(selectedDocumentCategory)}`}
-                  </span>
-                </button>
-
-                {!isCameraOpen ? (
+                <div className="flex justify-center gap-3 flex-wrap">
                   <button
                     type="button"
                     disabled={isUploadingPhotos}
-                    onClick={startLiveCamera}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-sm cursor-pointer transition-colors"
+                    onClick={() => photoInputRef.current?.click()}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-900 hover:bg-blue-950 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-sm cursor-pointer transition-colors"
                   >
-                    <Camera className="w-4 h-4" />
-                    <span>Open Live Camera</span>
+                    <UploadCloud className="w-4 h-4 text-amber-300" />
+                    <span>
+                      {isUploadingPhotos
+                        ? 'Uploading to Cloudinary...'
+                        : `Browse & Upload ${getDocumentCategoryLabel(selectedDocumentCategory)}`}
+                    </span>
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={stopLiveCamera}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold shadow-sm cursor-pointer transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                    <span>Close Camera</span>
-                  </button>
-                )}
+
+                  {!isCameraOpen ? (
+                    <button
+                      type="button"
+                      disabled={isUploadingPhotos}
+                      onClick={startLiveCamera}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-sm cursor-pointer transition-colors"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>Open Live Camera</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={stopLiveCamera}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-sm cursor-pointer transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                      <span>Close Camera</span>
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Supports multiple photos (JPEG, PNG) and documents (PDF, DOCX) • Stored on Cloudinary
+                </p>
+              </div>
+
+              {isUploadingPhotos && (
+                <div className="p-3 bg-blue-100 border border-blue-300 rounded-xl flex items-center gap-3 text-blue-900">
+                  <span className="w-4 h-4 border-2 border-blue-700 border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span className="text-xs font-bold">
+                    {uploadProgressStatus || 'Uploading files to Cloudinary...'}
+                  </span>
+                </div>
+              )}
+
+              {cameraError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-700">
+                  {cameraError}
+                </div>
+              )}
+
+              {isCameraOpen && (
+                <div className="bg-slate-900 rounded-xl p-4 space-y-3 text-center">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full max-h-72 object-contain rounded-lg mx-auto bg-black"
+                  />
+                  <div className="flex justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={captureLivePhoto}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md cursor-pointer"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>Capture &amp; Save Photo to File</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopLiveCamera();
+                    setShowPhotoUploadPanel(false);
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
+                >
+                  Close
+                </button>
               </div>
             </div>
-
-            {cameraError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-700">
-                {cameraError}
-              </div>
-            )}
-
-            {isCameraOpen && (
-              <div className="bg-slate-900 rounded-xl p-4 space-y-3 text-center">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full max-h-80 object-contain rounded-lg mx-auto bg-black"
-                />
-                <div className="flex justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={captureLivePhoto}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md cursor-pointer"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>Capture & Save Photo to File</span>
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -2689,50 +2782,69 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedDocumentCategory('OR');
-                    setShowPhotoUploadPanel(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-black transition-colors cursor-pointer shadow-xs"
+                  disabled={isUploadingPhotos}
+                  onClick={() => triggerDirectUpload('EVIDENCE')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 active:bg-indigo-800 disabled:opacity-50 text-white rounded-lg text-xs font-black transition-colors cursor-pointer shadow-xs"
+                  title="Click to browse & upload Case Evidence files or photos from device"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Upload OR</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedDocumentCategory('CR');
-                    setShowPhotoUploadPanel(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-black transition-colors cursor-pointer shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Upload CR</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedDocumentCategory('EVIDENCE');
-                    setShowPhotoUploadPanel(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black transition-colors cursor-pointer shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" />
+                  <UploadCloud className="w-3.5 h-3.5 text-amber-300" />
                   <span>Upload Evidence</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedDocumentCategory('VALID_ID');
-                    setShowPhotoUploadPanel((prev) => !prev);
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-extrabold transition-colors cursor-pointer shadow-xs"
+                  disabled={isUploadingPhotos}
+                  onClick={() => triggerDirectUpload('OR')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 disabled:opacity-50 text-slate-950 rounded-lg text-xs font-black transition-colors cursor-pointer shadow-xs"
+                  title="Click to browse & upload Official Receipt (OR) from device"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <UploadCloud className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Upload OR</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isUploadingPhotos}
+                  onClick={() => triggerDirectUpload('CR')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-black transition-colors cursor-pointer shadow-xs"
+                  title="Click to browse & upload Certificate of Registration (CR) from device"
+                >
+                  <UploadCloud className="w-3.5 h-3.5 text-white" />
+                  <span>Upload CR</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isUploadingPhotos}
+                  onClick={() => triggerDirectUpload('VALID_ID')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-extrabold transition-colors cursor-pointer shadow-xs"
+                  title="Click to browse & upload Valid ID or Driver's License from device"
+                >
+                  <UploadCloud className="w-3.5 h-3.5 text-white" />
                   <span>Upload ID / Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPhotoUploadPanel(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                  title="Open live camera or advanced upload options"
+                >
+                  <Camera className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Camera / Options</span>
                 </button>
               </div>
             </div>
+
+            {isUploadingPhotos && (
+              <div className="mx-5 my-3 p-3.5 bg-blue-50 border-2 border-blue-500 rounded-xl flex items-center justify-between gap-3 text-blue-950 animate-pulse">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-4 h-4 border-2 border-blue-700 border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span className="text-xs sm:text-sm font-extrabold">
+                    {uploadProgressStatus || 'Uploading file(s) to Cloudinary and saving to case file...'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
+                  Cloudinary Upload Active
+                </span>
+              </div>
+            )}
 
             <div className="p-5 space-y-4">
               {/* Filter Tabs by Document Category (ALL / OR / CR / EVIDENCE / VALID_ID / SCENE_PHOTO) */}
@@ -2793,41 +2905,52 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                 <div className="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-3">
                   <ImageIcon className="w-7 h-7 text-slate-400 mx-auto" />
                   <p className="text-xs font-semibold text-slate-600">
-                    No OR, CR, Valid ID, or Live Photo attached to this file yet.
+                    No Case Evidence, OR, CR, Valid ID, or Photos attached to this file yet.
                   </p>
-                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <div className="flex items-center justify-center gap-2.5 flex-wrap">
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedDocumentCategory('OR');
-                        setShowPhotoUploadPanel(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-extrabold cursor-pointer"
+                      disabled={isUploadingPhotos}
+                      onClick={() => triggerDirectUpload('EVIDENCE')}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold cursor-pointer shadow-xs transition-colors"
+                    >
+                      <UploadCloud className="w-4 h-4 text-amber-300" />
+                      <span>Upload Evidence (Photo / Document)</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isUploadingPhotos}
+                      onClick={() => triggerDirectUpload('OR')}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 rounded-xl text-xs font-extrabold cursor-pointer shadow-xs transition-colors"
                     >
                       <UploadCloud className="w-4 h-4" />
                       <span>Upload OR (Official Receipt)</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedDocumentCategory('CR');
-                        setShowPhotoUploadPanel(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-extrabold cursor-pointer"
+                      disabled={isUploadingPhotos}
+                      onClick={() => triggerDirectUpload('CR')}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold cursor-pointer shadow-xs transition-colors"
                     >
                       <UploadCloud className="w-4 h-4" />
                       <span>Upload CR (Certificate of Registration)</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedDocumentCategory('VALID_ID');
-                        setShowPhotoUploadPanel(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-950 text-white rounded-xl text-xs font-bold cursor-pointer"
+                      disabled={isUploadingPhotos}
+                      onClick={() => triggerDirectUpload('VALID_ID')}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold cursor-pointer shadow-xs transition-colors"
                     >
                       <UploadCloud className="w-4 h-4" />
                       <span>Upload Valid ID / Photo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPhotoUploadPanel(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer shadow-xs transition-colors"
+                    >
+                      <Camera className="w-4 h-4 text-amber-300" />
+                      <span>Camera / Upload Options</span>
                     </button>
                   </div>
                 </div>
