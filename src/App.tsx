@@ -552,6 +552,7 @@ export default function App() {
           reports={reports}
           onViewReport={(id) => setSelectedReportId(id)}
           onMergeReports={handleMergeReports}
+          onUploadAttachmentsToReport={handleUploadAttachmentsToReport}
           onLogout={handleLogout}
           onOpenQRCode={() => setIsQRModalOpen(true)}
           currentAdminEmail={adminEmail}

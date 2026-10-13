@@ -6,6 +6,8 @@ import {
   INVESTIGATOR_TEAMS,
   MergeInvestigatorName,
   validateAndNormalizeInvestigator,
+  DocumentCategoryType,
+  AttachmentItem,
 } from '../../types/reports';
 import { REPORT_TYPES } from '../../config/reportTypes';
 import { StatusBadge } from '../common/StatusBadge';
@@ -14,6 +16,8 @@ import { generateMergedFileTitle } from '../../utils/formatters';
 import { BrandLogo } from '../common/BrandLogo';
 import { BackgroundWatermark } from '../common/BackgroundWatermark';
 import { PWAInstallButton } from '../common/PWAInstallButton';
+import { useToast } from '../../context/ToastContext';
+import { uploadToCloudinary } from '../../services/cloudinary';
 import { 
   Search, 
   Filter, 
@@ -38,14 +42,18 @@ import {
   FolderLock,
   UploadCloud,
   GitMerge,
-  Users
+  Users,
+  Camera,
+  FileText,
+  Check
 } from 'lucide-react';
 import { GoogleDriveVault } from './GoogleDriveVault';
 import { 
   getGoogleDriveAccessToken, 
   connectGoogleDriveAccount, 
   subscribeToGoogleDriveToken,
-  normalizeFirestoreArray
+  normalizeFirestoreArray,
+  addAttachmentsToReportInFirestore
 } from '../../services/firebase';
 
 interface AdminDashboardProps {
@@ -56,6 +64,10 @@ interface AdminDashboardProps {
     secondaryReportIds: string[],
     deleteMergedOriginals?: boolean,
     mergedByInvestigator?: MergeInvestigatorName
+  ) => Promise<void> | void;
+  onUploadAttachmentsToReport?: (
+    reportId: string,
+    attachments: any[]
   ) => Promise<void> | void;
   onLogout: () => void;
   onOpenQRCode: () => void;
@@ -81,6 +93,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   reports,
   onViewReport,
   onMergeReports,
+  onUploadAttachmentsToReport,
   onLogout,
   onOpenQRCode,
   currentAdminEmail = 'bauan.pnp.investigation@gmail.com',
@@ -88,10 +101,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeleteReport,
   onEraseDatabase,
 }) => {
+  const toast = useToast();
   const [mainView, setMainView] = useState<'REPORTS' | 'GOOGLE_DRIVE'>('REPORTS');
   const [isDriveConnected, setIsDriveConnected] = useState<boolean>(() => !!getGoogleDriveAccessToken());
   const [isConnectingDrive, setIsConnectingDrive] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<TabType>('ALL');
+
+  // Quick Evidence & Document Upload directly to any Case or Merged File
+  const [quickUploadReport, setQuickUploadReport] = useState<ReportSubmission | null>(null);
+  const [quickUploadCategory, setQuickUploadCategory] = useState<DocumentCategoryType>('EVIDENCE');
+  const [isQuickUploading, setIsQuickUploading] = useState<boolean>(false);
+  const [quickUploadStatus, setQuickUploadStatus] = useState<string>('');
+
+  const handleQuickUploadFiles = async (files: FileList | File[]) => {
+    if (!quickUploadReport || !files || files.length === 0) return;
+    const fileList = Array.from(files);
+    setIsQuickUploading(true);
+    setQuickUploadStatus(`Uploading 0/${fileList.length} files to Cloudinary...`);
+
+    try {
+      const uploadedItems: AttachmentItem[] = [];
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        setQuickUploadStatus(`Uploading ${i + 1}/${fileList.length}: ${file.name}...`);
+        
+        const cResult = await uploadToCloudinary(file, {
+          reportType: quickUploadReport.reportType,
+          referenceNumber: quickUploadReport.referenceNumber,
+          clientName: `${quickUploadReport.personalInformation?.firstName || ''}_${quickUploadReport.personalInformation?.lastName || ''}`.trim(),
+          tags: ['admin_upload', quickUploadCategory],
+        });
+
+        uploadedItems.push({
+          id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          name: file.name,
+          size: file.size,
+          type: file.type || 'image/jpeg',
+          url: cResult.url,
+          uploadedAt: new Date().toISOString(),
+          documentCategory: quickUploadCategory,
+          documentCategoryLabel: quickUploadCategory === 'EVIDENCE' ? 'Case Evidence' : quickUploadCategory,
+          partyId: 'PRIMARY',
+          partyLabel: 'Primary File',
+          partyReferenceNumber: quickUploadReport.referenceNumber,
+          publicId: cResult.public_id,
+          cloudinaryFolder: cResult.folder,
+        });
+      }
+
+      setQuickUploadStatus('Attaching to case file in database...');
+      if (onUploadAttachmentsToReport) {
+        await onUploadAttachmentsToReport(quickUploadReport.id, uploadedItems);
+      } else {
+        await addAttachmentsToReportInFirestore(quickUploadReport.id, uploadedItems, currentAdminEmail);
+      }
+
+      toast.success(
+        `Attached ${uploadedItems.length} file(s) to Case #${quickUploadReport.referenceNumber}!`,
+        'Uploaded to Cloudinary'
+      );
+      setQuickUploadReport(null);
+    } catch (err: any) {
+      console.error('[Quick Upload Error]:', err);
+      toast.error(err.message || 'Failed to upload files to Cloudinary');
+    } finally {
+      setIsQuickUploading(false);
+      setQuickUploadStatus('');
+    }
+  };
 
   // Multi-select state for merging 2+ client records into 1 combined file (while keeping all original files intact)
   const [selectedForMerge, setSelectedForMerge] = useState<string[]>([]);
@@ -1179,10 +1256,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onViewReport(item.id);
+                                  setQuickUploadReport(item);
+                                  setQuickUploadCategory('EVIDENCE');
                                 }}
-                                className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-[11px] font-bold uppercase tracking-wider shadow-2xs transition-colors cursor-pointer"
-                                title="Open case to upload evidence, photos, OR, or CR"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-[11px] font-bold uppercase tracking-wider shadow-2xs transition-colors cursor-pointer"
+                                title="Upload evidence, OR, CR, or photos directly to this case"
                               >
                                 <UploadCloud className="w-3 h-3 text-amber-300" />
                                 <span>Upload</span>
@@ -1309,13 +1387,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onViewReport(item.id);
+                            setQuickUploadReport(item);
+                            setQuickUploadCategory('EVIDENCE');
                           }}
-                          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
-                          title="Open case to upload evidence, photos, OR, or CR"
+                          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
+                          title="Upload evidence, OR, CR, or photos directly to this case"
                         >
-                          <UploadCloud className="w-3.5 h-3.5" />
-                          <span>Upload</span>
+                          <UploadCloud className="w-3.5 h-3.5 text-amber-300" />
+                          <span>Upload Evidence</span>
                         </button>
                         <button
                           type="button"
@@ -1418,25 +1497,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
       </main>
 
-      {/* MERGE SELECTED RECORDS INTO 1 SINGLE FILE MODAL */}
+      {/* MERGE SELECTED RECORDS INTO 1 SINGLE FILE MODAL (COMPACT & VIEWPORT-CONSTRAINED) */}
       {showMergeModal && selectedForMerge.length >= 2 && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-fadeIn"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/80 backdrop-blur-xs animate-fadeIn"
           onClick={() => !isMerging && setShowMergeModal(false)}
         >
           <div
-            className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200"
+            className="bg-white rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[88vh]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-blue-950 text-white px-5 py-4 flex items-center justify-between">
+            <div className="bg-blue-950 text-white px-5 py-3 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
-                <GitMerge className="w-5 h-5 text-amber-400" />
+                <GitMerge className="w-5 h-5 text-amber-400 shrink-0" />
                 <div>
-                  <h3 className="font-extrabold text-sm sm:text-base">
+                  <h3 className="font-extrabold text-sm sm:text-base leading-tight">
                     Merge {selectedForMerge.length} Documents into 1 Single File
                   </h3>
-                  <p className="text-[11px] text-blue-200">
-                    Combines all parties, vehicles, and photos without conflict or nested errors
+                  <p className="text-[11px] text-blue-200 leading-tight">
+                    Combines parties, vehicles, and photos into a unified case
                   </p>
                 </div>
               </div>
@@ -1449,12 +1528,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs text-slate-700">
+            <div className="p-4 space-y-3 text-xs text-slate-700 overflow-y-auto flex-1">
               <div>
-                <label className="block font-extrabold text-slate-900 mb-2">
-                  Select Primary Case File (Main Reference Number to Keep):
+                <label className="block font-black text-slate-900 mb-1.5 text-xs">
+                  1. Select Primary Case File (Main Reference Number to Keep):
                 </label>
-                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
                   {selectedForMerge.map((id, idx) => {
                     const rec = reports.find((r) => r.id === id);
                     if (!rec) return null;
@@ -1462,31 +1541,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     const fullName = [pi.firstName, pi.middleName, pi.lastName]
                       .filter(Boolean)
                       .join(' ');
-                    const isPrimary =
-                      (primaryMergeId || selectedForMerge[0]) === rec.id;
+                    const isPrimary = (primaryMergeId || selectedForMerge[0]) === rec.id;
 
                     return (
                       <label
                         key={rec.id}
-                        className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                        className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-all ${
                           isPrimary
-                            ? 'bg-blue-50 border-blue-700 ring-2 ring-blue-500/20'
+                            ? 'bg-blue-50 border-blue-700 ring-1 ring-blue-500/20'
                             : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
                           <input
                             type="radio"
                             name="primaryMergeRecord"
                             checked={isPrimary}
                             onChange={() => setPrimaryMergeId(rec.id)}
-                            className="w-4 h-4 text-blue-900 focus:ring-blue-900 cursor-pointer"
+                            className="w-3.5 h-3.5 text-blue-900 focus:ring-blue-900 cursor-pointer"
                           />
-                          <div className="min-w-0">
-                            <span className="font-mono font-black text-blue-950 block">
+                          <div className="min-w-0 leading-tight">
+                            <span className="font-mono font-black text-blue-950 text-xs">
                               {rec.referenceNumber} {isPrimary ? '• [PRIMARY FILE]' : `• [MERGED PARTY ${idx + 1}]`}
                             </span>
-                            <span className="font-bold text-slate-800 block truncate">
+                            <span className="font-medium text-slate-700 text-[11px] block truncate">
                               {fullName || 'Client'} ({REPORT_TYPES[rec.reportType]?.nameEn || rec.reportType})
                             </span>
                           </div>
@@ -1498,17 +1576,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               {/* Investigator Team & Name Validation Section (Team 1: Saycon & Care | Team 2: Alzate & Serwelas) */}
-              <div className="space-y-2.5">
+              <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <label className="block font-extrabold text-slate-900">
-                    Choose Investigator Team & Name (Required Validation):
+                  <label className="block font-black text-slate-900 text-xs">
+                    2. Choose Investigator Team &amp; Name (Required Validation):
                   </label>
                   <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-100 text-indigo-900">
                     Team 1 or Team 2 Required
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Compact Team Selector Segmented Bar */}
+                <div className="grid grid-cols-2 gap-2">
                   {INVESTIGATOR_TEAMS.map((team) => {
                     const currentVal = selectedMergeInvestigator
                       ? validateAndNormalizeInvestigator(selectedMergeInvestigator)
@@ -1517,103 +1596,106 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       Boolean(selectedMergeInvestigator) && currentVal?.teamId === team.id;
 
                     return (
-                      <div
+                      <button
                         key={team.id}
+                        type="button"
                         onClick={() => {
-                          if (!isTeamSelected) {
-                            setSelectedMergeInvestigator(team.defaultSelection);
-                            setMergeInvestigatorError(null);
-                          }
+                          setSelectedMergeInvestigator(team.defaultSelection);
+                          setMergeInvestigatorError(null);
                         }}
-                        className={`rounded-xl border-2 p-3 transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                        className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
                           isTeamSelected
-                            ? 'bg-indigo-50/90 border-indigo-700 ring-2 ring-indigo-500/20 shadow-xs'
-                            : 'bg-slate-50 border-slate-200 hover:border-indigo-300 hover:bg-slate-100/70'
+                            ? 'bg-indigo-900 text-white border-indigo-950 ring-2 ring-indigo-500/30 shadow-xs'
+                            : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
-                                isTeamSelected
-                                  ? 'bg-indigo-900 text-amber-300'
-                                  : 'bg-slate-200 text-slate-700'
-                              }`}
-                            >
-                              <Shield className="w-3 h-3" />
-                              <span>Team {team.teamNumber}</span>
-                            </span>
-                            <h4 className="font-black text-xs sm:text-sm text-slate-900 mt-1">
-                              {team.teamPairName}
-                            </h4>
-                            <p className="text-[11px] font-semibold text-slate-600">
-                              {team.teamSubtitle}
-                            </p>
-                          </div>
-                          <input
-                            type="radio"
-                            name="mergeInvestigatorTeamDashboard"
-                            checked={isTeamSelected}
-                            onChange={() => {
-                              setSelectedMergeInvestigator(team.defaultSelection);
-                              setMergeInvestigatorError(null);
-                            }}
-                            className="w-4 h-4 text-indigo-900 focus:ring-indigo-900 cursor-pointer mt-1"
-                          />
-                        </div>
-
-                        <div
-                          className="space-y-1.5 pt-2 border-t border-slate-200/80"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">
-                            Select Investigator in Team {team.teamNumber}:
+                        <div className="flex items-center justify-between gap-1">
+                          <span
+                            className={`text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                              isTeamSelected ? 'bg-indigo-800 text-amber-300' : 'bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            Team {team.teamNumber}
                           </span>
-                          {team.investigators.map((inv) => {
-                            const isInvSelected = selectedMergeInvestigator === inv.value;
-                            return (
-                              <label
-                                key={inv.value}
-                                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs cursor-pointer transition-all ${
-                                  isInvSelected
-                                    ? 'bg-indigo-900 text-white border-indigo-950 font-black shadow-2xs'
-                                    : 'bg-white hover:bg-indigo-50 text-slate-800 border-slate-200 font-bold'
-                                }`}
-                              >
-                                <input
-                                  type="radio"
-                                  name="mergeInvestigatorSpecificDashboard"
-                                  value={inv.value}
-                                  checked={isInvSelected}
-                                  onChange={() => {
-                                    setSelectedMergeInvestigator(inv.value);
-                                    setMergeInvestigatorError(null);
-                                  }}
-                                  className="w-3.5 h-3.5 accent-amber-400 cursor-pointer"
-                                />
-                                <span className="truncate">{inv.shortName}</span>
-                              </label>
-                            );
-                          })}
+                          <span
+                            className={`w-3 h-3 rounded-full border flex items-center justify-center ${
+                              isTeamSelected ? 'border-amber-400 bg-amber-400' : 'border-slate-300'
+                            }`}
+                          >
+                            {isTeamSelected && <span className="w-1.5 h-1.5 rounded-full bg-indigo-950" />}
+                          </span>
                         </div>
-                      </div>
+                        <div className="font-extrabold text-xs mt-1 truncate">
+                          {team.teamPairName}
+                        </div>
+                        <div
+                          className={`text-[10px] truncate ${
+                            isTeamSelected ? 'text-indigo-200' : 'text-slate-500'
+                          }`}
+                        >
+                          {team.teamSubtitle}
+                        </div>
+                      </button>
                     );
                   })}
                 </div>
 
+                {/* Compact Specific Investigator Selection Pills for Selected Team */}
+                {(() => {
+                  const currentVal = selectedMergeInvestigator
+                    ? validateAndNormalizeInvestigator(selectedMergeInvestigator)
+                    : null;
+                  const activeTeam =
+                    INVESTIGATOR_TEAMS.find((t) => t.id === (currentVal?.teamId || 'TEAM_1')) ||
+                    INVESTIGATOR_TEAMS[0];
+
+                  return (
+                    <div className="p-2 bg-indigo-50/80 border border-indigo-200 rounded-xl space-y-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-indigo-900 block">
+                        Select Investigator for Team {activeTeam.teamNumber} ({activeTeam.teamPairName}):
+                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {activeTeam.investigators.map((inv) => {
+                          const isInvSelected = selectedMergeInvestigator === inv.value;
+                          return (
+                            <button
+                              key={inv.value}
+                              type="button"
+                              onClick={() => {
+                                setSelectedMergeInvestigator(inv.value);
+                                setMergeInvestigatorError(null);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                isInvSelected
+                                  ? 'bg-indigo-900 text-white shadow-xs ring-1 ring-amber-400'
+                                  : 'bg-white hover:bg-indigo-100 text-slate-800 border border-slate-200'
+                              }`}
+                            >
+                              <span
+                                className={`w-2 h-2 rounded-full ${
+                                  isInvSelected ? 'bg-amber-400' : 'bg-slate-300'
+                                }`}
+                              />
+                              <span>{inv.shortName}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {mergeInvestigatorError && (
-                  <div className="p-2.5 bg-rose-50 border border-rose-300 rounded-xl flex items-center gap-2 text-rose-800 font-bold text-xs animate-fadeIn">
-                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <div className="p-2 bg-rose-50 border border-rose-300 rounded-lg flex items-center gap-1.5 text-rose-800 font-bold text-xs animate-fadeIn">
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                     <span>{mergeInvestigatorError}</span>
                   </div>
                 )}
 
                 {selectedMergeInvestigator && (
-                  <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between gap-2 text-emerald-950 text-xs font-extrabold">
-                    <div className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>Validated Investigator Team: {selectedMergeInvestigator}</span>
-                    </div>
+                  <div className="p-2 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center gap-1.5 text-emerald-950 text-xs font-extrabold">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="truncate">Validated Investigator: {selectedMergeInvestigator}</span>
                   </div>
                 )}
               </div>
@@ -1631,55 +1713,191 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   sRecs.map((sr) => ({ personalInformation: sr.personalInformation }))
                 );
                 return (
-                  <div className="p-3.5 bg-indigo-50 border border-indigo-300 rounded-xl space-y-1">
+                  <div className="p-2.5 bg-indigo-50 border border-indigo-300 rounded-lg space-y-0.5">
                     <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800 block">
                       Auto-Generated Merged File Name:
                     </span>
-                    <p className="text-xs sm:text-sm font-black text-indigo-950">
+                    <p className="text-xs font-black text-indigo-950 truncate">
                       {previewTitle}
                     </p>
                   </div>
                 );
               })()}
 
-              <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl space-y-1">
-                <span className="font-extrabold text-emerald-950 flex items-center gap-1.5 text-xs">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>All Original Client Files Will Remain Intact!</span>
+              <div className="p-2 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center gap-2 text-[11px] text-emerald-900 font-semibold">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Original files remain untouched in Original Client Submissions.</span>
+              </div>
+            </div>
+
+            <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                disabled={isMerging}
+                onClick={() => setShowMergeModal(false)}
+                className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isMerging}
+                onClick={handleConfirmDashboardMerge}
+                className="px-4 py-1.5 bg-blue-900 hover:bg-blue-950 text-white rounded-lg font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isMerging ? (
+                  <>
+                    <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Merging into Single File...</span>
+                  </>
+                ) : (
+                  <>
+                    <GitMerge className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Confirm &amp; Merge into 1 File</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK EVIDENCE & DOCUMENT UPLOAD MODAL FOR ANY CASE OR MERGED FILE */}
+      {quickUploadReport && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/80 backdrop-blur-xs animate-fadeIn"
+          onClick={() => !isQuickUploading && setQuickUploadReport(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-indigo-950 text-white px-5 py-3.5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <UploadCloud className="w-5 h-5 text-amber-400" />
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base leading-tight">
+                    Upload to Case #{quickUploadReport.referenceNumber}
+                  </h3>
+                  <p className="text-[11px] text-indigo-200 leading-tight">
+                    {isMergedReportRecord(quickUploadReport) ? 'Merged File' : 'Original Case'} • Stored permanently on Cloudinary
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isQuickUploading}
+                onClick={() => setQuickUploadReport(null)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-indigo-200 hover:text-white bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3.5 overflow-y-auto flex-1 text-xs">
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                  Target Case / Merged File:
                 </span>
-                <p className="text-[11px] text-emerald-800 leading-relaxed">
-                  Combining these records creates a dedicated file in the <strong>Merged Files Section</strong> while keeping every selected original client file untouched in <strong>Original Client Submissions</strong>.
-                </p>
+                <span className="font-extrabold text-slate-900 text-xs sm:text-sm block">
+                  #{quickUploadReport.referenceNumber} —{' '}
+                  {quickUploadReport.personalInformation?.firstName} {quickUploadReport.personalInformation?.lastName}
+                </span>
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  disabled={isMerging}
-                  onClick={() => setShowMergeModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={isMerging}
-                  onClick={handleConfirmDashboardMerge}
-                  className="px-5 py-2 bg-blue-900 hover:bg-blue-950 text-white rounded-lg font-bold shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  {isMerging ? (
-                    <>
-                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>Merging into Single File...</span>
-                    </>
-                  ) : (
-                    <>
-                      <GitMerge className="w-4 h-4 text-amber-400" />
-                      <span>Confirm & Merge into 1 File</span>
-                    </>
-                  )}
-                </button>
+              {/* Category Selector Tabs */}
+              <div className="space-y-1.5">
+                <label className="block font-black text-slate-900 text-xs">
+                  Choose Document / Evidence Category:
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {[
+                    { id: 'EVIDENCE', label: 'Evidence', desc: 'Photos & Docs' },
+                    { id: 'OR', label: 'OR', desc: 'Official Receipt' },
+                    { id: 'CR', label: 'CR', desc: 'Cert. Reg.' },
+                    { id: 'VALID_ID', label: 'Valid ID', desc: "Driver's / Gov" },
+                  ].map((cat) => {
+                    const isSelected = quickUploadCategory === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        disabled={isQuickUploading}
+                        onClick={() => setQuickUploadCategory(cat.id as DocumentCategoryType)}
+                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-slate-900 text-white border-slate-950 ring-2 ring-indigo-500/30 shadow-xs'
+                            : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        <span className="font-black text-xs block">{cat.label}</span>
+                        <span className="text-[10px] opacity-80 block truncate">{cat.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* Upload Drop Zone / Input */}
+              <div className="border-2 border-dashed border-indigo-300 hover:border-indigo-600 rounded-2xl p-6 text-center transition-colors bg-indigo-50/40 relative">
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf,.doc,.docx"
+                  disabled={isQuickUploading}
+                  onChange={(e) => {
+                    if (e.target.files) handleQuickUploadFiles(e.target.files);
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                />
+                <div className="flex flex-col items-center justify-center space-y-2 pointer-events-none">
+                  <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700">
+                    <UploadCloud className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="font-extrabold text-indigo-950 text-xs sm:text-sm">
+                      Click to Browse Files or Drag &amp; Drop Here
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Supports JPG, PNG, WEBP, PDF, and Documents (Direct to Cloudinary)
+                    </p>
+                  </div>
+                  <span className="inline-block px-3 py-1 bg-indigo-900 text-white rounded-lg text-[11px] font-bold shadow-xs">
+                    Select {quickUploadCategory} Files
+                  </span>
+                </div>
+              </div>
+
+              {isQuickUploading && (
+                <div className="p-3 bg-blue-50 border border-blue-300 rounded-xl flex items-center gap-2.5 text-blue-950 animate-pulse">
+                  <span className="w-4 h-4 border-2 border-blue-700 border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span className="text-xs font-bold truncate">
+                    {quickUploadStatus || 'Uploading to Cloudinary...'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetId = quickUploadReport.id;
+                  setQuickUploadReport(null);
+                  onViewReport(targetId);
+                }}
+                className="text-xs font-bold text-indigo-900 hover:underline cursor-pointer"
+              >
+                Open Full Case View &rarr;
+              </button>
+              <button
+                type="button"
+                disabled={isQuickUploading}
+                onClick={() => setQuickUploadReport(null)}
+                className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg font-bold text-xs cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

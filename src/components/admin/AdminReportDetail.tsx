@@ -3593,56 +3593,63 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL: MERGE / COMBINE OTHER SUBMITTED DOCUMENTS INTO THIS SINGLE FILE    */}
+      {/* MODAL: MERGE / COMBINE OTHER SUBMITTED DOCUMENTS INTO THIS SINGLE FILE (COMPACT) */}
       {/* ========================================================================= */}
       {showMergeModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-xs animate-fadeIn"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/80 backdrop-blur-xs animate-fadeIn"
           onClick={() => !isMergingRecords && setShowMergeModal(false)}
         >
           <div
-            className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[88vh]"
+            className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[88vh]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-6 py-4 bg-indigo-950 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <GitMerge className="w-5 h-5 text-amber-300" />
+            <div className="px-5 py-3 bg-indigo-950 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <GitMerge className="w-5 h-5 text-amber-300 shrink-0" />
                 <div>
-                  <h3 className="text-sm sm:text-base font-black uppercase tracking-wider">
-                    Combine Submitted Client Documents into File #{report.referenceNumber}
+                  <h3 className="text-sm sm:text-base font-black uppercase tracking-wider leading-tight">
+                    Combine Documents into File #{report.referenceNumber}
                   </h3>
-                  <p className="text-[11px] text-indigo-200">
-                    Merges selected records & photos into this single file without conflict or nested errors
+                  <p className="text-[11px] text-indigo-200 leading-tight">
+                    Merges records &amp; photos into this single file without conflict
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => !isMergingRecords && setShowMergeModal(false)}
-                className="p-1.5 text-indigo-200 hover:text-white rounded-lg cursor-pointer"
+                className="p-1 text-indigo-200 hover:text-white rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4 overflow-y-auto flex-1">
-              <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-950">
-                <strong>Primary Destination File:</strong> #{report.referenceNumber} —{' '}
-                {personalInfo.firstName} {personalInfo.lastName} ({reportConfig?.nameEn})
+            <div className="p-4 space-y-3 overflow-y-auto flex-1 text-xs">
+              <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-950 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-black tracking-wider text-blue-700 block">
+                    Primary Destination File:
+                  </span>
+                  <span className="font-extrabold text-xs">
+                    #{report.referenceNumber} — {personalInfo.firstName} {personalInfo.lastName} ({reportConfig?.nameEn})
+                  </span>
+                </div>
               </div>
 
-              {/* Investigator Team & Name Validation Section (Team 1: Saycon & Care | Team 2: Alzate & Serwelas) */}
-              <div className="space-y-2.5">
+              {/* Investigator Team & Name Validation Section */}
+              <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <label className="block text-xs font-extrabold text-slate-900">
-                    Choose Investigator Team & Name (Required Validation):
+                  <label className="block text-xs font-black text-slate-900">
+                    Choose Investigator Team &amp; Name (Required Validation):
                   </label>
                   <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-100 text-indigo-900">
                     Team 1 or Team 2 Required
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Compact Team Selector Segmented Bar */}
+                <div className="grid grid-cols-2 gap-2">
                   {INVESTIGATOR_TEAMS.map((team) => {
                     const currentVal = selectedMergeInvestigator
                       ? validateAndNormalizeInvestigator(selectedMergeInvestigator)
@@ -3651,124 +3658,128 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                       Boolean(selectedMergeInvestigator) && currentVal?.teamId === team.id;
 
                     return (
-                      <div
+                      <button
                         key={team.id}
+                        type="button"
                         onClick={() => {
-                          if (!isTeamSelected) {
-                            setSelectedMergeInvestigator(team.defaultSelection);
-                            setMergeInvestigatorError(null);
-                          }
+                          setSelectedMergeInvestigator(team.defaultSelection);
+                          setMergeInvestigatorError(null);
                         }}
-                        className={`rounded-xl border-2 p-3 transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                        className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
                           isTeamSelected
-                            ? 'bg-indigo-50/90 border-indigo-700 ring-2 ring-indigo-500/20 shadow-xs'
-                            : 'bg-slate-50 border-slate-200 hover:border-indigo-300 hover:bg-slate-100/70'
+                            ? 'bg-indigo-900 text-white border-indigo-950 ring-2 ring-indigo-500/30 shadow-xs'
+                            : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
-                                isTeamSelected
-                                  ? 'bg-indigo-900 text-amber-300'
-                                  : 'bg-slate-200 text-slate-700'
-                              }`}
-                            >
-                              <UserCheck className="w-3 h-3" />
-                              <span>Team {team.teamNumber}</span>
-                            </span>
-                            <h4 className="font-black text-xs sm:text-sm text-slate-900 mt-1">
-                              {team.teamPairName}
-                            </h4>
-                            <p className="text-[11px] font-semibold text-slate-600">
-                              {team.teamSubtitle}
-                            </p>
-                          </div>
-                          <input
-                            type="radio"
-                            name="mergeInvestigatorTeamDetail"
-                            checked={isTeamSelected}
-                            onChange={() => {
-                              setSelectedMergeInvestigator(team.defaultSelection);
-                              setMergeInvestigatorError(null);
-                            }}
-                            className="w-4 h-4 text-indigo-900 focus:ring-indigo-900 cursor-pointer mt-1"
-                          />
-                        </div>
-
-                        <div
-                          className="space-y-1.5 pt-2 border-t border-slate-200/80"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">
-                            Select Investigator in Team {team.teamNumber}:
+                        <div className="flex items-center justify-between gap-1">
+                          <span
+                            className={`text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                              isTeamSelected ? 'bg-indigo-800 text-amber-300' : 'bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            Team {team.teamNumber}
                           </span>
-                          {team.investigators.map((inv) => {
-                            const isInvSelected = selectedMergeInvestigator === inv.value;
-                            return (
-                              <label
-                                key={inv.value}
-                                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs cursor-pointer transition-all ${
-                                  isInvSelected
-                                    ? 'bg-indigo-900 text-white border-indigo-950 font-black shadow-2xs'
-                                    : 'bg-white hover:bg-indigo-50 text-slate-800 border-slate-200 font-bold'
-                                }`}
-                              >
-                                <input
-                                  type="radio"
-                                  name="mergeInvestigatorSpecificDetail"
-                                  value={inv.value}
-                                  checked={isInvSelected}
-                                  onChange={() => {
-                                    setSelectedMergeInvestigator(inv.value);
-                                    setMergeInvestigatorError(null);
-                                  }}
-                                  className="w-3.5 h-3.5 accent-amber-400 cursor-pointer"
-                                />
-                                <span className="truncate">{inv.shortName}</span>
-                              </label>
-                            );
-                          })}
+                          <span
+                            className={`w-3 h-3 rounded-full border flex items-center justify-center ${
+                              isTeamSelected ? 'border-amber-400 bg-amber-400' : 'border-slate-300'
+                            }`}
+                          >
+                            {isTeamSelected && <span className="w-1.5 h-1.5 rounded-full bg-indigo-950" />}
+                          </span>
                         </div>
-                      </div>
+                        <div className="font-extrabold text-xs mt-1 truncate">
+                          {team.teamPairName}
+                        </div>
+                        <div
+                          className={`text-[10px] truncate ${
+                            isTeamSelected ? 'text-indigo-200' : 'text-slate-500'
+                          }`}
+                        >
+                          {team.teamSubtitle}
+                        </div>
+                      </button>
                     );
                   })}
                 </div>
 
+                {/* Compact Specific Investigator Selection Pills for Selected Team */}
+                {(() => {
+                  const currentVal = selectedMergeInvestigator
+                    ? validateAndNormalizeInvestigator(selectedMergeInvestigator)
+                    : null;
+                  const activeTeam =
+                    INVESTIGATOR_TEAMS.find((t) => t.id === (currentVal?.teamId || 'TEAM_1')) ||
+                    INVESTIGATOR_TEAMS[0];
+
+                  return (
+                    <div className="p-2 bg-indigo-50/80 border border-indigo-200 rounded-xl space-y-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-indigo-900 block">
+                        Select Investigator for Team {activeTeam.teamNumber} ({activeTeam.teamPairName}):
+                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {activeTeam.investigators.map((inv) => {
+                          const isInvSelected = selectedMergeInvestigator === inv.value;
+                          return (
+                            <button
+                              key={inv.value}
+                              type="button"
+                              onClick={() => {
+                                setSelectedMergeInvestigator(inv.value);
+                                setMergeInvestigatorError(null);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                isInvSelected
+                                  ? 'bg-indigo-900 text-white shadow-xs ring-1 ring-amber-400'
+                                  : 'bg-white hover:bg-indigo-100 text-slate-800 border border-slate-200'
+                              }`}
+                            >
+                              <span
+                                className={`w-2 h-2 rounded-full ${
+                                  isInvSelected ? 'bg-amber-400' : 'bg-slate-300'
+                                }`}
+                              />
+                              <span>{inv.shortName}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {mergeInvestigatorError && (
-                  <div className="p-2.5 bg-rose-50 border border-rose-300 rounded-xl flex items-center gap-2 text-rose-800 font-bold text-xs animate-fadeIn">
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <div className="p-2 bg-rose-50 border border-rose-300 rounded-lg flex items-center gap-1.5 text-rose-800 font-bold text-xs animate-fadeIn">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                     <span>{mergeInvestigatorError}</span>
                   </div>
                 )}
 
                 {selectedMergeInvestigator && (
-                  <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between gap-2 text-emerald-950 text-xs font-extrabold">
-                    <div className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>Validated Investigator Team: {selectedMergeInvestigator}</span>
-                    </div>
+                  <div className="p-2 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center gap-1.5 text-emerald-950 text-xs font-extrabold">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="truncate">Validated Investigator: {selectedMergeInvestigator}</span>
                   </div>
                 )}
               </div>
 
+              {/* Search Bar for Other Submissions */}
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={mergeSearchQuery}
                   onChange={(e) => setMergeSearchQuery(e.target.value)}
-                  placeholder="Search other submitted client records by name, reference #, or plate number..."
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:border-indigo-600"
+                  placeholder="Search other client records by name, ref #, or plate..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-hidden focus:border-indigo-600"
                 />
               </div>
 
               {mergeableReports.length === 0 ? (
-                <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500">
+                <div className="text-center py-5 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-xs text-slate-500">
                   No other standalone client submissions found to merge.
                 </div>
               ) : (
-                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                   {mergeableReports.map((cand) => {
                     const isChecked = selectedIdsToMerge.includes(cand.id);
                     const cPi = cand.personalInformation || ({} as PersonalInformation);
@@ -3776,9 +3787,9 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                     return (
                       <label
                         key={cand.id}
-                        className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors ${
+                        className={`flex items-start gap-2.5 p-2 rounded-lg border cursor-pointer transition-colors ${
                           isChecked
-                            ? 'bg-indigo-50 border-indigo-600'
+                            ? 'bg-indigo-50 border-indigo-600 ring-1 ring-indigo-500/20'
                             : 'bg-white hover:bg-slate-50 border-slate-200'
                         }`}
                       >
@@ -3792,14 +3803,14 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                                 : [...prev, cand.id]
                             )
                           }
-                          className="mt-1 w-4 h-4 accent-indigo-700 rounded cursor-pointer"
+                          className="mt-0.5 w-3.5 h-3.5 accent-indigo-700 rounded cursor-pointer"
                         />
-                        <div className="flex-1 min-w-0 text-xs">
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex-1 min-w-0 text-xs leading-tight">
+                          <div className="flex items-center justify-between gap-1 flex-wrap">
                             <span className="font-black text-slate-900">
                               {cPi.firstName} {cPi.middleName} {cPi.lastName} (#{cand.referenceNumber})
                             </span>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
                               {cand.reportType === 'vehicular-incident'
                                 ? 'Vehicular Accident'
                                 : 'Personal Info'}
@@ -3807,14 +3818,9 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                           </div>
                           {cData.plateNumber && (
                             <p className="text-[11px] font-mono text-amber-900 font-bold mt-0.5">
-                              Vehicle: {cData.vehicleMake || cData.vehicleMakeModel}{' '}
-                              {cData.vehicleModel} ({cData.plateNumber})
+                              Plate: {cData.plateNumber} ({cData.vehicleMake || cData.vehicleMakeModel || ''})
                             </p>
                           )}
-                          <p className="text-[11px] text-slate-500 mt-0.5 truncate">
-                            Address: {cPi.address || '—'} • Submitted:{' '}
-                            {formatHumanDateTime(cand.createdAt)}
-                          </p>
                         </div>
                       </label>
                     );
@@ -3822,25 +3828,18 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                 </div>
               )}
 
-              <div className="flex items-start gap-2.5 p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-900">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-extrabold block text-emerald-950">
-                    All Original Client Files Remain 100% Untouched
-                  </span>
-                  <span className="text-[11px] text-emerald-800 block mt-0.5">
-                    Merging creates/updates a dedicated record in the <strong>Merged Files Section</strong> while keeping every original client file intact in the <strong>Original Client Submissions</strong> section.
-                  </span>
-                </div>
+              <div className="p-2 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center gap-2 text-[11px] text-emerald-900 font-semibold">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Original client files remain 100% untouched in Original Client Submissions.</span>
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+            <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
               <button
                 type="button"
                 disabled={isMergingRecords}
                 onClick={() => setShowMergeModal(false)}
-                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold cursor-pointer"
+                className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
@@ -3848,9 +3847,9 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                 type="button"
                 disabled={isMergingRecords || selectedIdsToMerge.length === 0}
                 onClick={handleConfirmMergeInsideDetail}
-                className="inline-flex items-center gap-1.5 px-5 py-2 bg-indigo-900 hover:bg-indigo-950 disabled:bg-slate-300 text-white rounded-xl text-xs font-extrabold shadow-sm cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-indigo-900 hover:bg-indigo-950 disabled:bg-slate-300 text-white rounded-lg text-xs font-extrabold shadow-xs cursor-pointer"
               >
-                <GitMerge className="w-4 h-4 text-amber-300" />
+                <GitMerge className="w-3.5 h-3.5 text-amber-300" />
                 <span>
                   {isMergingRecords
                     ? 'Creating Merged File...'
