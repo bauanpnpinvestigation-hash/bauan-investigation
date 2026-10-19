@@ -24,7 +24,7 @@ export const REPORT_TYPES: Record<string, ReportTypeDefinition> = {
             type: 'select',
             required: false,
             options: [
-              { label: 'Vehicular Incident (Insidente sa Sasakyan)', value: 'Vehicular Incident' },
+              { label: 'Self Accident / Incident (Aksidente sa Sarili)', value: 'Self Accident / Incident' },
               { label: 'General Incident / Blotter (Pangkalahatang Insidente)', value: 'General Incident' },
               { label: 'Complaint / Grievance (Reklamo / Sumbong)', value: 'Complaint' },
               { label: 'Police Clearance / Certification (Sertipikasyon)', value: 'Certification' },

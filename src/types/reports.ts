@@ -195,12 +195,12 @@ export const COMMON_INCIDENT_TYPES: CommonIncidentTypeOption[] = [
     badgeColor: 'bg-red-100 text-red-900 border-red-300',
   },
   {
-    id: 'vehicular-traffic',
-    labelEn: 'Vehicular / Traffic Incident',
-    labelFil: 'Insidente o Aksidente sa Sasakyan',
-    category: 'Vehicular Incident',
-    descriptionEn: 'Vehicle collision, traffic damage, or vehicular accident matter.',
-    descriptionFil: 'Banggaan, atrasan, o pinsala sa sasakyan at trapiko.',
+    id: 'self-accident',
+    labelEn: 'Self Accident / Incident',
+    labelFil: 'Aksidente sa Sarili / Self-Accident',
+    category: 'Self Accident / Incident',
+    descriptionEn: 'Self-accident, motorcycle slide/skid, hitting a fixed object, rollover, or single-vehicle incident.',
+    descriptionFil: 'Aksidente sa sarili, pagkadulas ng motor, pagsalpok sa poste/pader, o rollover.',
     badgeColor: 'bg-orange-100 text-orange-900 border-orange-300',
   },
   {

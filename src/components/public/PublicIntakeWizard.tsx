@@ -501,10 +501,11 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                       (Impormasyon ng Tao at Ulat ng Insidente / Kaso)
                     </p>
                     <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
-                      Pumili ng uri ng insidente (General Police Report, Theft, Lost Items, Pananakit, Reklamo, Sertipikasyon, o Iba Pa) kasama ang kumpletong personal na rekord.
+                      Pumili ng uri ng insidente (General Police Report, Self-Accident, Theft, Lost Items, Pananakit, Reklamo, Sertipikasyon, o Iba Pa) kasama ang kumpletong personal na rekord.
                     </p>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       <span className="px-2 py-0.5 bg-blue-100 text-blue-900 text-[10px] font-bold rounded-md">Police Blotter</span>
+                      <span className="px-2 py-0.5 bg-orange-100 text-orange-900 text-[10px] font-bold rounded-md">Self-Accident / Incident</span>
                       <span className="px-2 py-0.5 bg-rose-100 text-rose-900 text-[10px] font-bold rounded-md">Theft</span>
                       <span className="px-2 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-bold rounded-md">Lost Item / ID</span>
                       <span className="px-2 py-0.5 bg-red-100 text-red-900 text-[10px] font-bold rounded-md">Pananakit</span>
