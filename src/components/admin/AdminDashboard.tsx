@@ -8,6 +8,7 @@ import {
   validateAndNormalizeInvestigator,
   DocumentCategoryType,
   AttachmentItem,
+  COMMON_INCIDENT_TYPES,
 } from '../../types/reports';
 import { REPORT_TYPES } from '../../config/reportTypes';
 import { StatusBadge } from '../common/StatusBadge';
@@ -45,7 +46,8 @@ import {
   Users,
   Camera,
   FileText,
-  Check
+  Check,
+  Tag
 } from 'lucide-react';
 import { GoogleDriveVault } from './GoogleDriveVault';
 import { 
@@ -353,8 +355,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       // Dropdown status filter
       if (filterStatus !== 'ALL' && report.status !== filterStatus) return false;
 
-      // Filter by report type
-      if (filterType !== 'ALL' && report.reportType !== filterType) return false;
+      // Filter by report type / incident / case classification
+      if (filterType !== 'ALL') {
+        const matchesReportType = report.reportType === filterType;
+        const rData = report.reportData || {};
+        const caseClass = String(rData.caseClassification || '').toLowerCase();
+        const incType = String(rData.incidentType || '').toLowerCase();
+        const incTypeId = String(rData.incidentTypeId || '').toLowerCase();
+        const filterLower = filterType.toLowerCase();
+
+        const matchesCase =
+          caseClass.includes(filterLower) ||
+          incType.includes(filterLower) ||
+          incTypeId === filterLower ||
+          (filterType === 'personal-intake' && (report.reportType === 'personal-intake' || !report.reportType));
+
+        if (!matchesReportType && !matchesCase) return false;
+      }
 
       // Filter by date (YYYY-MM-DD)
       if (filterDate) {
@@ -362,7 +379,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         if (reportDate !== filterDate) return false;
       }
 
-      // Text search (including any merged parties inside a combined file!)
+      // Text search (including incident type, case details, and any merged parties inside a combined file!)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const refMatch = (report.referenceNumber || '').toLowerCase().includes(q);
@@ -370,15 +387,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         const nameMatch = `${pi.firstName || ''} ${pi.middleName || ''} ${pi.lastName || ''}`.toLowerCase().includes(q);
         const phoneMatch = (pi.contactNumber || '').toLowerCase().includes(q);
         const addressMatch = (pi.address || '').toLowerCase().includes(q);
+        const rData = report.reportData || {};
+        const caseMatch =
+          String(rData.caseClassification || '').toLowerCase().includes(q) ||
+          String(rData.incidentType || '').toLowerCase().includes(q) ||
+          String(rData.location || '').toLowerCase().includes(q) ||
+          String(rData.incidentLocation || '').toLowerCase().includes(q) ||
+          String(rData.narrative || '').toLowerCase().includes(q) ||
+          String(rData.officialNarrative || '').toLowerCase().includes(q) ||
+          String(rData.plateNumber || '').toLowerCase().includes(q) ||
+          String(rData.vehicleMake || '').toLowerCase().includes(q) ||
+          String(rData.vehicleModel || '').toLowerCase().includes(q);
         const mergedParties = normalizeFirestoreArray(report.mergedParties);
         const mergedMatch = mergedParties.some((mp: any) => {
           const mpi = mp?.personalInformation || {};
           const mName = `${mpi.firstName || ''} ${mpi.middleName || ''} ${mpi.lastName || ''}`.toLowerCase();
           const mRef = String(mp?.referenceNumber || '').toLowerCase();
           const mPhone = String(mpi.contactNumber || '').toLowerCase();
-          return mName.includes(q) || mRef.includes(q) || mPhone.includes(q);
+          const mpData = mp?.reportData || {};
+          const mpCase =
+            String(mpData.caseClassification || '').toLowerCase().includes(q) ||
+            String(mpData.incidentType || '').toLowerCase().includes(q) ||
+            String(mpData.plateNumber || '').toLowerCase().includes(q);
+          return mName.includes(q) || mRef.includes(q) || mPhone.includes(q) || mpCase;
         });
-        return refMatch || nameMatch || phoneMatch || addressMatch || mergedMatch;
+        return refMatch || nameMatch || phoneMatch || addressMatch || caseMatch || mergedMatch;
       }
 
       return true;
@@ -797,19 +830,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               />
             </div>
 
-            {/* Filter by Report Type */}
+            {/* Filter by Report Type / Incident & Case Type */}
             <div>
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-600"
+                className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-600 cursor-pointer"
               >
-                <option value="ALL">All Report Types</option>
-                {Object.values(REPORT_TYPES).map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.nameEn}
-                  </option>
-                ))}
+                <option value="ALL">All Report & Case Types</option>
+                <optgroup label="Primary Form Types">
+                  <option value="personal-intake">Personal Information Record</option>
+                  <option value="vehicular-incident">Vehicular Accident Record</option>
+                </optgroup>
+                <optgroup label="Police Incident & Common Cases">
+                  {COMMON_INCIDENT_TYPES.map((cit) => (
+                    <option key={cit.id} value={cit.category}>
+                      {cit.labelEn}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </div>
 
@@ -1207,7 +1246,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             )}
                           </td>
                           <td className="py-3 px-4 font-semibold text-slate-700">
-                            {reportTypeName}
+                            <div>{reportTypeName}</div>
+                            {(item.reportData?.incidentType || item.reportData?.caseClassification) && (
+                              <span
+                                className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-blue-100 text-blue-900 border border-blue-200 text-[10px] font-bold max-w-[200px] truncate"
+                                title={item.reportData.incidentType || item.reportData.caseClassification}
+                              >
+                                <Tag className="w-2.5 h-2.5 text-blue-700 shrink-0" />
+                                <span>{item.reportData.incidentType || item.reportData.caseClassification}</span>
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-4 font-bold text-slate-900">
                             {isMergedReportRecord(item) ? (
@@ -1353,9 +1401,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             })}
                           </div>
                         )}
-                        <div className="text-slate-600 flex items-center gap-1 text-[11px]">
+                        <div className="text-slate-600 flex items-center gap-1.5 text-[11px] flex-wrap">
                           <Layers className="w-3 h-3 text-slate-400 shrink-0" />
                           <span className="truncate">{reportTypeName}</span>
+                          {(item.reportData?.incidentType || item.reportData?.caseClassification) && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-900 border border-blue-200 text-[10px] font-bold">
+                              <Tag className="w-2.5 h-2.5 text-blue-700 shrink-0" />
+                              <span>{item.reportData.incidentType || item.reportData.caseClassification}</span>
+                            </span>
+                          )}
                         </div>
                         {pi.contactNumber && (
                           <div className="text-slate-500 font-mono flex items-center gap-1 text-[11px]">

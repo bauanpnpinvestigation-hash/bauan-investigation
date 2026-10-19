@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { 
   PersonalInformation, 
   ReportSubmission,
-  AttachmentItem
+  AttachmentItem,
+  COMMON_INCIDENT_TYPES,
+  CommonIncidentTypeOption
 } from '../../types/reports';
 import { PersonalInformationForm } from '../form/PersonalInformationForm';
 import { FileUploadDropzone } from '../form/FileUploadDropzone';
@@ -35,7 +37,10 @@ import {
   ArrowLeft,
   Camera,
   MapPin,
-  Clock
+  Clock,
+  AlertTriangle,
+  Tag,
+  ShieldAlert
 } from 'lucide-react';
 
 interface PublicIntakeWizardProps {
@@ -45,6 +50,24 @@ interface PublicIntakeWizardProps {
 }
 
 type PublicWizardMode = 'select' | 'personal-intake' | 'vehicular-incident';
+
+export interface PersonalIncidentFields {
+  incidentTypeId: string;
+  incidentTypeLabel: string;
+  incidentDate: string;
+  incidentTime: string;
+  location: string;
+  narrative: string;
+}
+
+const INITIAL_INCIDENT_FIELDS: PersonalIncidentFields = {
+  incidentTypeId: 'police-report-general',
+  incidentTypeLabel: 'Police Blotter / General Incident Report',
+  incidentDate: new Date().toISOString().split('T')[0],
+  incidentTime: '',
+  location: '',
+  narrative: '',
+};
 
 interface VehicularAccidentFields {
   placeOfIncident: string;
@@ -92,6 +115,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
   // Step 1: Fill Info -> Step 2: Review -> Step 3: Success (Ref#)
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [personalInfo, setPersonalInfo] = useState<PersonalInformation>(INITIAL_PERSONAL_INFO);
+  const [incidentFields, setIncidentFields] = useState<PersonalIncidentFields>(INITIAL_INCIDENT_FIELDS);
   const [vehicularFields, setVehicularFields] = useState<VehicularAccidentFields>(INITIAL_VEHICULAR_FIELDS);
   const [incidentDatePicker, setIncidentDatePicker] = useState<string>('');
   const [incidentTimePicker, setIncidentTimePicker] = useState<string>('');
@@ -120,6 +144,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
   
   // Validation errors
   const [personalErrors, setPersonalErrors] = useState<Partial<Record<keyof PersonalInformation, string>>>({});
+  const [incidentErrors, setIncidentErrors] = useState<Partial<Record<keyof PersonalIncidentFields, string>>>({});
   const [vehicularErrors, setVehicularErrors] = useState<Partial<Record<keyof VehicularAccidentFields, string>>>({});
   
   // Confirmation Modal
@@ -136,6 +161,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
     setWizardMode(mode);
     setCurrentStep(1);
     setPersonalErrors({});
+    setIncidentErrors({});
     setVehicularErrors({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -144,6 +170,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
     setWizardMode('select');
     setCurrentStep(1);
     setPersonalErrors({});
+    setIncidentErrors({});
     setVehicularErrors({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -166,6 +193,27 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
     }
 
     setPersonalErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  // Validate Incident Fields (for Personal Information & Police Report)
+  const validateIncidentFields = (): boolean => {
+    const errs: Partial<Record<keyof PersonalIncidentFields, string>> = {};
+    if (!incidentFields.incidentTypeId) {
+      errs.incidentTypeId = 'Please select an Incident Type or Case (Pumili ng Uri ng Insidente o Kaso).';
+    }
+    if (!incidentFields.incidentDate) {
+      errs.incidentDate = 'Date of Incident is required (Kailangan ang Petsa ng Insidente).';
+    }
+    if (!incidentFields.location.trim()) {
+      errs.location = 'Location of Incident is required (Kailangan ang Lugar ng Insidente).';
+    }
+    if (!incidentFields.narrative.trim()) {
+      errs.narrative = 'Please provide a narrative or summary of what occurred (Kailangan ang Salaysay o Buod ng Pangyayari).';
+    } else if (incidentFields.narrative.trim().length < 8) {
+      errs.narrative = 'Please provide a more detailed narrative of the incident (Habaan ang salaysay).';
+    }
+    setIncidentErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
@@ -205,9 +253,13 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     } else {
-      if (validatePersonalInfo()) {
+      const isPersonalValid = validatePersonalInfo();
+      const isIncidentValid = validateIncidentFields();
+      if (isPersonalValid && isIncidentValid) {
         setCurrentStep(2);
         window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        window.scrollTo({ top: 120, behavior: 'smooth' });
       }
     }
   };
@@ -275,7 +327,17 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
             vehicleColor: vehicularFields.vehicleColor.trim(),
             plateNumber: vehicularFields.plateNumber.trim(),
           }
-        : {},
+        : {
+            incidentTypeId: incidentFields.incidentTypeId,
+            incidentType: incidentFields.incidentTypeLabel,
+            caseClassification: incidentFields.incidentTypeLabel,
+            incidentDate: incidentFields.incidentDate,
+            incidentTime: incidentFields.incidentTime.trim(),
+            incidentLocation: incidentFields.location.trim(),
+            location: incidentFields.location.trim(),
+            narrative: incidentFields.narrative.trim(),
+            officialNarrative: incidentFields.narrative.trim(),
+          },
       attachments: flatValidatedAttachments,
       adminNotes: [],
       auditLogs: [
@@ -287,7 +349,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
           action: 'VIEW_REPORT',
           details: isVehicular
             ? `Client submitted Vehicular Accident intake via Public Portal (${attachments.length} photo/ID attached): ${refNo}`
-            : `Client submitted full Personal Information intake via QR (${attachments.length} photo/ID attached): ${refNo}`,
+            : `Client submitted Personal Information & [${incidentFields.incidentTypeLabel}] via Public Portal (${attachments.length} photo/ID attached): ${refNo}`,
         },
       ],
       stationOffice: isVehicular ? 'Traffic Enforcement Unit' : 'Investigation & Records Section',
@@ -312,6 +374,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
     setWizardMode('select');
     setCurrentStep(1);
     setPersonalInfo(INITIAL_PERSONAL_INFO);
+    setIncidentFields(INITIAL_INCIDENT_FIELDS);
     setVehicularFields(INITIAL_VEHICULAR_FIELDS);
     setIncidentDatePicker('');
     setIncidentTimePicker('');
@@ -319,6 +382,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
     setClientReferenceNumber(generateReferenceNumber());
     setSubmissionResult(null);
     setPersonalErrors({});
+    setIncidentErrors({});
     setVehicularErrors({});
     setHasConsented(false);
     setConsentError(false);
@@ -416,7 +480,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-              {/* Option 1: Personal Information (Standalone) */}
+              {/* Option 1: Personal Information & Police Incident Report */}
               <button
                 type="button"
                 onClick={() => handleSelectMode('personal-intake')}
@@ -428,22 +492,30 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                   </div>
                   <div>
                     <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-800 block">
-                      Option 1 • General Intake
+                      Option 1 • Police Report & Common Cases Intake
                     </span>
                     <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-0.5">
-                      Personal Information
+                      Personal Information & Police Incident Report
                     </h3>
                     <p className="text-xs font-bold text-slate-600 mt-0.5">
-                      (Impormasyon ng Tao)
+                      (Impormasyon ng Tao at Ulat ng Insidente / Kaso)
                     </p>
                     <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
-                      Para sa kumpletong personal na detalye (Pangalan, Kapanganakan, Edad, Kasarian, Katayuang Sibil, Trabaho, Tirahan, at Contact Number).
+                      Pumili ng uri ng insidente (General Police Report, Theft, Lost Items, Pananakit, Reklamo, Sertipikasyon, o Iba Pa) kasama ang kumpletong personal na rekord.
                     </p>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-900 text-[10px] font-bold rounded-md">Police Blotter</span>
+                      <span className="px-2 py-0.5 bg-rose-100 text-rose-900 text-[10px] font-bold rounded-md">Theft</span>
+                      <span className="px-2 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-bold rounded-md">Lost Item / ID</span>
+                      <span className="px-2 py-0.5 bg-red-100 text-red-900 text-[10px] font-bold rounded-md">Pananakit</span>
+                      <span className="px-2 py-0.5 bg-teal-100 text-teal-900 text-[10px] font-bold rounded-md">Reklamo</span>
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded-md">+ Other Cases</span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-extrabold text-blue-900 group-hover:text-blue-950">
-                  <span>Buksan ang Personal Info Wizard</span>
+                  <span>Buksan ang Personal Info & Police Report Wizard</span>
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                 </div>
               </button>
@@ -556,15 +628,247 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
             )}
 
             {/* =================================================================
-                STEP 1A: PERSONAL INFORMATION WIZARD (UNTOUCHED STANDALONE)
+                STEP 1A: PERSONAL INFORMATION & POLICE INCIDENT WIZARD
                ================================================================= */}
             {currentStep === 1 && wizardMode === 'personal-intake' && (
               <div className="space-y-6 animate-fadeIn">
+                {/* Part 1: Incident Type & Case Classification (Police Report / Common Cases) */}
+                <div className="bg-white/85 rounded-xl p-5 sm:p-7 border-2 border-blue-900/40 shadow-xs space-y-6">
+                  <div className="border-b border-slate-200 pb-4">
+                    <span className="text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5 mb-1">
+                      <Shield className="w-4 h-4 text-blue-700" />
+                      <span>Citizen Police Intake • Part 1 of 3</span>
+                    </span>
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                      Uri ng Insidente o Kaso (Incident Type & Case Category)
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                      Pumili ng uri ng insidente o kaso para sa iyong Police Report o blotter record, at punan ang petsa, oras, lugar, at buod ng pangyayari.
+                    </p>
+                  </div>
+
+                  {/* Incident Type Selector: Common Police Cases */}
+                  <div className="space-y-3">
+                    <label className="block text-sm font-extrabold text-slate-900">
+                      1. Pumili ng Uri ng Kaso / Insidente (Select Incident Type / Case) <span className="text-rose-600">*</span>
+                      <span className="block text-xs font-normal text-slate-500 mt-0.5">
+                        Pindutin ang isa sa mga karaniwang kaso sa ibaba:
+                      </span>
+                    </label>
+
+                    {/* Quick Selection Grid for Common Police Cases */}
+                    <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {COMMON_INCIDENT_TYPES.map((typeOption) => {
+                        const isSelected = incidentFields.incidentTypeId === typeOption.id;
+                        return (
+                          <button
+                            key={typeOption.id}
+                            type="button"
+                            onClick={() => {
+                              setIncidentFields((prev) => ({
+                                ...prev,
+                                incidentTypeId: typeOption.id,
+                                incidentTypeLabel: typeOption.labelEn,
+                              }));
+                              if (incidentErrors.incidentTypeId) {
+                                setIncidentErrors((prev) => ({ ...prev, incidentTypeId: undefined }));
+                              }
+                            }}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                              isSelected
+                                ? 'bg-blue-900 text-white border-blue-900 ring-2 ring-blue-900/30 shadow-xs'
+                                : 'bg-slate-50/80 hover:bg-white text-slate-800 border-slate-200 hover:border-blue-400'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
+                                isSelected ? 'bg-white/20 text-white' : typeOption.badgeColor
+                              }`}>
+                                {typeOption.category}
+                              </span>
+                              {isSelected && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                            </div>
+                            <div>
+                              <div className={`text-xs font-extrabold ${isSelected ? 'text-white' : 'text-slate-900'}`}>
+                                {typeOption.labelEn}
+                              </div>
+                              <div className={`text-[11px] mt-0.5 line-clamp-2 ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
+                                {typeOption.labelFil}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Dropdown Selector */}
+                    <div className="pt-1">
+                      <select
+                        value={incidentFields.incidentTypeId}
+                        onChange={(e) => {
+                          const chosen = COMMON_INCIDENT_TYPES.find((t) => t.id === e.target.value);
+                          if (chosen) {
+                            setIncidentFields((prev) => ({
+                              ...prev,
+                              incidentTypeId: chosen.id,
+                              incidentTypeLabel: chosen.labelEn,
+                            }));
+                          }
+                          if (incidentErrors.incidentTypeId) {
+                            setIncidentErrors((prev) => ({ ...prev, incidentTypeId: undefined }));
+                          }
+                        }}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-600 cursor-pointer"
+                      >
+                        {COMMON_INCIDENT_TYPES.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.labelEn} — ({t.labelFil})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {incidentErrors.incidentTypeId && (
+                      <p className="text-xs text-rose-600 font-semibold flex items-center gap-1 mt-1">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>{incidentErrors.incidentTypeId}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Incident Date & Time */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 mb-1">
+                        2. Petsa ng Insidente (Date of Incident) <span className="text-rose-600">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={incidentFields.incidentDate}
+                        onChange={(e) => {
+                          setIncidentFields((prev) => ({ ...prev, incidentDate: e.target.value }));
+                          if (incidentErrors.incidentDate) {
+                            setIncidentErrors((prev) => ({ ...prev, incidentDate: undefined }));
+                          }
+                        }}
+                        className={`w-full px-3 py-2.5 bg-white border rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-600 ${
+                          incidentErrors.incidentDate ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                        }`}
+                      />
+                      {incidentErrors.incidentDate && (
+                        <p className="text-xs text-rose-600 font-semibold mt-1">
+                          {incidentErrors.incidentDate}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 mb-1">
+                        3. Oras ng Insidente (Time of Incident)
+                        <span className="text-[11px] font-normal text-slate-500 ml-1">(Hal. 2:30 PM o 14:30)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={incidentFields.incidentTime}
+                        onChange={(e) => setIncidentFields((prev) => ({ ...prev, incidentTime: e.target.value }))}
+                        placeholder="Halimbawa: 2:30 PM o 09:15 AM"
+                        className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Incident Location */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1">
+                      4. Lugar ng Insidente / Barangay (Location of Incident) <span className="text-rose-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={incidentFields.location}
+                      onChange={(e) => {
+                        setIncidentFields((prev) => ({ ...prev, location: e.target.value }));
+                        if (incidentErrors.location) {
+                          setIncidentErrors((prev) => ({ ...prev, location: undefined }));
+                        }
+                      }}
+                      placeholder="Halimbawa: Brgy. Poblacion, Bauan, Batangas (Kalsada, Landmark, o Barangay)"
+                      className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-600 ${
+                        incidentErrors.location ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                      }`}
+                    />
+                    {/* Quick Location Pills */}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                      <span className="text-[11px] text-slate-500 font-medium mr-1">Quick Suggestions:</span>
+                      {[
+                        'Brgy. Poblacion, Bauan',
+                        'Brgy. Manghinao Proper, Bauan',
+                        'Brgy. Aplaya, Bauan',
+                        'National Highway, Bauan',
+                        'Bauan Public Market',
+                        'Brgy. San Roque, Bauan',
+                      ].map((loc) => (
+                        <button
+                          key={loc}
+                          type="button"
+                          onClick={() => {
+                            setIncidentFields((prev) => ({ ...prev, location: loc }));
+                            if (incidentErrors.location) {
+                              setIncidentErrors((prev) => ({ ...prev, location: undefined }));
+                            }
+                          }}
+                          className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-blue-50 text-[10px] font-medium text-slate-700 hover:text-blue-900 border border-slate-200 transition-colors cursor-pointer"
+                        >
+                          + {loc}
+                        </button>
+                      ))}
+                    </div>
+                    {incidentErrors.location && (
+                      <p className="text-xs text-rose-600 font-semibold mt-1">
+                        {incidentErrors.location}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Statement / Narrative */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1">
+                      5. Salaysay / Buod ng Pangyayari (Narrative / Police Statement) <span className="text-rose-600">*</span>
+                      <span className="block text-[11px] font-normal text-slate-500 mt-0.5">
+                        Ilarawan nang buo at malinaw ang buong pangyayari, mga gamit na nawala o nasira, at ano ang naging dahilan.
+                      </span>
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={incidentFields.narrative}
+                      onChange={(e) => {
+                        setIncidentFields((prev) => ({ ...prev, narrative: e.target.value }));
+                        if (incidentErrors.narrative) {
+                          setIncidentErrors((prev) => ({ ...prev, narrative: undefined }));
+                        }
+                      }}
+                      placeholder="Halimbawa: Noong ganap na 2:30 ng hapon, habang ako ay nasa Bauan Public Market, napansin ko na nawawala ang aking pitaka na naglalaman ng driver's license at mga ID..."
+                      className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-600 leading-relaxed ${
+                        incidentErrors.narrative ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
+                      }`}
+                    />
+                    <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400">
+                      <span>Hindi bababa sa 8 letra (minimum 8 characters)</span>
+                      <span>{incidentFields.narrative.length} characters</span>
+                    </div>
+                    {incidentErrors.narrative && (
+                      <p className="text-xs text-rose-600 font-semibold mt-1">
+                        {incidentErrors.narrative}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Part 2: Personal Information */}
                 <div className="bg-white/75 rounded-xl p-5 sm:p-7 border border-slate-200/80 shadow-xs space-y-6">
                   <div className="border-b border-slate-200 pb-4">
                     <span className="text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5 mb-1">
                       <UserCheck className="w-4 h-4 text-blue-700" />
-                      <span>Public Citizen Entry</span>
+                      <span>Citizen Police Intake • Part 2 of 3</span>
                     </span>
                     <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                       Personal Information (Impormasyon ng Tao)
@@ -1401,6 +1705,96 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                   </>
                 )}
 
+                {/* When Personal Intake: Incident Type & Case Classification Review Card */}
+                {wizardMode === 'personal-intake' && (
+                  <div className="bg-white/85 rounded-xl p-5 sm:p-6 border-2 border-blue-900/40 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between border-b border-blue-200 pb-3">
+                      <div>
+                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-800 block">
+                          Case Details Summary (Buod ng Insidente)
+                        </span>
+                        <h4 className="font-extrabold text-sm sm:text-base text-slate-900">
+                          INCIDENT & POLICE CASE INFORMATION (Ulat ng Kaso)
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleBackToEdit}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-blue-900 hover:text-blue-950 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-300 cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>[EDIT]</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleBackToEdit}
+                          aria-label="Back to editing"
+                          title="Bumalik (X)"
+                          className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs sm:text-sm">
+                      <div className="sm:col-span-2 lg:col-span-1 p-2.5 bg-blue-50/70 rounded-lg border border-blue-200">
+                        <dt className="text-blue-900 font-bold text-[11px] uppercase tracking-wider">
+                          Case Classification
+                        </dt>
+                        <dd className="font-extrabold text-blue-950 mt-1 flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2.5 py-1 bg-blue-900 text-white rounded-md text-xs font-black">
+                            {incidentFields.incidentTypeLabel}
+                          </span>
+                        </dd>
+                      </div>
+
+                      <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <dt className="text-slate-500 font-medium text-[11px]">Petsa ng Insidente</dt>
+                          <dd className="font-bold text-slate-900 mt-0.5 truncate">
+                            {formatHumanDate(incidentFields.incidentDate) || incidentFields.incidentDate || '—'}
+                          </dd>
+                        </div>
+                        <CopyButton value={formatHumanDate(incidentFields.incidentDate) || incidentFields.incidentDate} label="Incident Date" size="sm" />
+                      </div>
+
+                      <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <dt className="text-slate-500 font-medium text-[11px]">Oras ng Insidente</dt>
+                          <dd className="font-bold text-slate-900 mt-0.5 truncate">
+                            {incidentFields.incidentTime || 'Not specified'}
+                          </dd>
+                        </div>
+                        {incidentFields.incidentTime && (
+                          <CopyButton value={incidentFields.incidentTime} label="Incident Time" size="sm" />
+                        )}
+                      </div>
+
+                      <div className="sm:col-span-2 lg:col-span-3 p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <dt className="text-slate-500 font-medium text-[11px]">Lugar ng Insidente (Location)</dt>
+                          <dd className="font-bold text-slate-900 mt-0.5">
+                            {incidentFields.location || '—'}
+                          </dd>
+                        </div>
+                        <CopyButton value={incidentFields.location} label="Location" size="sm" />
+                      </div>
+
+                      <div className="sm:col-span-2 lg:col-span-3 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <dt className="text-slate-500 font-medium text-[11px]">Salaysay / Buod ng Pangyayari (Statement)</dt>
+                          <CopyButton value={incidentFields.narrative} label="Statement Narrative" size="sm" />
+                        </div>
+                        <dd className="text-xs sm:text-sm font-normal text-slate-900 leading-relaxed whitespace-pre-line select-all bg-white p-3 rounded border border-slate-200">
+                          {incidentFields.narrative || '—'}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                )}
+
                 {/* Personal Information Review */}
                 <div className="bg-white/75 rounded-xl p-5 sm:p-6 border border-slate-200/80 shadow-xs">
                   <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
@@ -1746,6 +2140,36 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                         {formattedVehicularSentence}
                       </p>
                     </div>
+                  </div>
+                )}
+
+                {/* If Personal Information & Police Report, show submitted Case Details */}
+                {submissionResult.reportType === 'personal-intake' && submissionResult.reportData?.caseClassification && (
+                  <div className="bg-white/85 p-5 rounded-2xl border border-blue-200 text-left space-y-3">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-900 block">
+                      Naitalang Uri ng Kaso / Insidente:
+                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-3 py-1.5 rounded-lg bg-blue-900 text-white text-xs font-black">
+                        {submissionResult.reportData.caseClassification}
+                      </span>
+                    </div>
+                    {submissionResult.reportData.location && (
+                      <div className="text-xs text-slate-700">
+                        <span className="font-semibold text-slate-500">Lugar: </span>
+                        <span className="font-bold text-slate-900">{submissionResult.reportData.location}</span>
+                      </div>
+                    )}
+                    {submissionResult.reportData.narrative && (
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                        <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                          Salaysay / Buod ng Pangyayari:
+                        </span>
+                        <p className="text-xs text-slate-800 leading-relaxed line-clamp-3 select-all">
+                          {submissionResult.reportData.narrative}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 

@@ -82,10 +82,15 @@ export const REPORT_TYPES: Record<string, ReportTypeDefinition> = {
         parts.push('');
       }
 
+      const caseClassification = reportData.caseClassification || reportData.incidentType;
+      const incidentLocation = reportData.incidentLocation || reportData.location;
+      const narrativeText = reportData.officialNarrative || reportData.narrative;
+
       const caseFields = [
-        { label: 'Case Classification', value: reportData.caseClassification },
+        { label: 'Case Classification', value: caseClassification },
         { label: 'Incident Date', value: formatHumanDate(reportData.incidentDate) },
-        { label: 'Incident Location', value: reportData.incidentLocation },
+        { label: 'Incident Time', value: reportData.incidentTime },
+        { label: 'Incident Location', value: incidentLocation },
         { label: 'Investigator on Case', value: reportData.investigatorAssigned },
       ];
       const caseText = formatSectionText('INVESTIGATION & CASE DETAILS', caseFields);
@@ -94,9 +99,9 @@ export const REPORT_TYPES: Record<string, ReportTypeDefinition> = {
         parts.push('');
       }
 
-      if (reportData.officialNarrative?.trim()) {
+      if (narrativeText?.trim()) {
         parts.push('OFFICIAL POLICE NARRATIVE / STATEMENT');
-        parts.push(reportData.officialNarrative.trim());
+        parts.push(narrativeText.trim());
         parts.push('');
       }
 

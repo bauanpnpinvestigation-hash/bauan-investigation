@@ -10,6 +10,7 @@ import {
   INVESTIGATOR_TEAMS,
   MergeInvestigatorName,
   validateAndNormalizeInvestigator,
+  COMMON_INCIDENT_TYPES,
 } from '../../types/reports';
 import { REPORT_TYPES } from '../../config/reportTypes';
 import { CopyButton } from '../common/CopyButton';
@@ -1703,6 +1704,113 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                   </div>
                 )}
 
+                {editPrimaryReportType === 'personal-intake' && (
+                  <div className="p-4 bg-white rounded-xl border border-blue-300 space-y-3">
+                    <h5 className="text-xs font-black uppercase text-blue-950 flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 text-blue-800" />
+                      <span>Incident & Police Case Fields (Party 1)</span>
+                    </h5>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Case Classification / Incident Type (Uri ng Kaso / Insidente)
+                        </label>
+                        <select
+                          value={editPrimaryReportData.caseClassification || editPrimaryReportData.incidentType || ''}
+                          onChange={(e) =>
+                            setEditPrimaryReportData((prev) => ({
+                              ...prev,
+                              caseClassification: e.target.value,
+                              incidentType: e.target.value,
+                            }))
+                          }
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold bg-white cursor-pointer"
+                        >
+                          <option value="">Select or leave as general</option>
+                          {COMMON_INCIDENT_TYPES.map((cit) => (
+                            <option key={cit.id} value={cit.labelEn}>
+                              {cit.labelEn}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Date of Incident (Petsa ng Insidente)
+                        </label>
+                        <input
+                          type="date"
+                          value={editPrimaryReportData.incidentDate || ''}
+                          onChange={(e) =>
+                            setEditPrimaryReportData((prev) => ({
+                              ...prev,
+                              incidentDate: e.target.value,
+                            }))
+                          }
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Time of Incident (Oras ng Insidente)
+                        </label>
+                        <input
+                          type="text"
+                          value={editPrimaryReportData.incidentTime || ''}
+                          onChange={(e) =>
+                            setEditPrimaryReportData((prev) => ({
+                              ...prev,
+                              incidentTime: e.target.value,
+                            }))
+                          }
+                          placeholder="e.g. 2:30 PM"
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Location of Incident (Lugar ng Insidente)
+                        </label>
+                        <input
+                          type="text"
+                          value={editPrimaryReportData.location || editPrimaryReportData.incidentLocation || ''}
+                          onChange={(e) =>
+                            setEditPrimaryReportData((prev) => ({
+                              ...prev,
+                              location: e.target.value,
+                              incidentLocation: e.target.value,
+                            }))
+                          }
+                          placeholder="e.g. Brgy. Poblacion, Bauan, Batangas"
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Official Statement / Narrative (Salaysay / Buod ng Pangyayari)
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={editPrimaryReportData.narrative || editPrimaryReportData.officialNarrative || ''}
+                          onChange={(e) =>
+                            setEditPrimaryReportData((prev) => ({
+                              ...prev,
+                              narrative: e.target.value,
+                              officialNarrative: e.target.value,
+                            }))
+                          }
+                          placeholder="Record narrative details or statement..."
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold leading-relaxed"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Personal Information Fields for Party 1 */}
                 <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-3">
                   <h5 className="text-xs font-black uppercase text-blue-950">
@@ -1977,6 +2085,100 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                       </div>
                       <CopyButton value={reportData.plateNumber} label="Plate Number" />
                     </div>
+                  </div>
+                )}
+
+                {/* Incident & Police Case Information (Party 1) */}
+                {(reportData.caseClassification || reportData.incidentType || reportData.narrative || reportData.location) && (
+                  <div className="p-5 bg-blue-50/50 border-b border-blue-200 divide-y divide-blue-100 text-xs sm:text-sm">
+                    <div className="pb-2.5 flex items-center justify-between gap-2">
+                      <span className="text-xs font-black uppercase text-blue-900 tracking-wider flex items-center gap-1.5">
+                        <Shield className="w-3.5 h-3.5 text-blue-700" />
+                        <span>Incident & Police Case Details (Tala sa Insidente / Kaso)</span>
+                      </span>
+                    </div>
+
+                    {(reportData.caseClassification || reportData.incidentType) && (
+                      <div className="py-2.5 flex items-center justify-between gap-4">
+                        <div className="w-2/3">
+                          <span className="text-slate-500 font-medium block text-xs">
+                            Case Classification (Uri ng Kaso / Insidente)
+                          </span>
+                          <span className="font-extrabold text-blue-950 inline-block mt-0.5 px-2.5 py-0.5 bg-blue-100 border border-blue-300 rounded-md text-xs">
+                            {reportData.caseClassification || reportData.incidentType}
+                          </span>
+                        </div>
+                        <CopyButton
+                          value={reportData.caseClassification || reportData.incidentType}
+                          label="Case Classification"
+                        />
+                      </div>
+                    )}
+
+                    {reportData.incidentDate && (
+                      <div className="py-2.5 flex items-center justify-between gap-4">
+                        <div className="w-2/3">
+                          <span className="text-slate-500 font-medium block text-xs">
+                            Incident Date (Petsa ng Insidente)
+                          </span>
+                          <span className="font-bold text-slate-900">
+                            {formatHumanDate(reportData.incidentDate) || reportData.incidentDate}
+                          </span>
+                        </div>
+                        <CopyButton
+                          value={formatHumanDate(reportData.incidentDate) || reportData.incidentDate}
+                          label="Incident Date"
+                        />
+                      </div>
+                    )}
+
+                    {reportData.incidentTime && (
+                      <div className="py-2.5 flex items-center justify-between gap-4">
+                        <div className="w-2/3">
+                          <span className="text-slate-500 font-medium block text-xs">
+                            Incident Time (Oras ng Insidente)
+                          </span>
+                          <span className="font-bold text-slate-900">
+                            {reportData.incidentTime}
+                          </span>
+                        </div>
+                        <CopyButton value={reportData.incidentTime} label="Incident Time" />
+                      </div>
+                    )}
+
+                    {(reportData.location || reportData.incidentLocation) && (
+                      <div className="py-2.5 flex items-center justify-between gap-4">
+                        <div className="w-2/3">
+                          <span className="text-slate-500 font-medium block text-xs">
+                            Location (Lugar ng Insidente)
+                          </span>
+                          <span className="font-bold text-slate-900">
+                            {reportData.location || reportData.incidentLocation}
+                          </span>
+                        </div>
+                        <CopyButton
+                          value={reportData.location || reportData.incidentLocation}
+                          label="Location"
+                        />
+                      </div>
+                    )}
+
+                    {(reportData.narrative || reportData.officialNarrative) && (
+                      <div className="py-2.5 space-y-1.5">
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-slate-500 font-medium block text-xs">
+                            Narrative / Official Statement (Salaysay / Buod ng Pangyayari)
+                          </span>
+                          <CopyButton
+                            value={reportData.narrative || reportData.officialNarrative}
+                            label="Narrative Statement"
+                          />
+                        </div>
+                        <div className="p-3 bg-white rounded-lg border border-blue-200 text-slate-800 leading-relaxed font-sans text-xs whitespace-pre-line select-all">
+                          {reportData.narrative || reportData.officialNarrative}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

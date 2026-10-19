@@ -147,6 +147,118 @@ export interface AuditLogEntry {
   details?: string;
 }
 
+export interface CommonIncidentTypeOption {
+  id: string;
+  labelEn: string;
+  labelFil: string;
+  category: string;
+  descriptionEn: string;
+  descriptionFil: string;
+  badgeColor: string;
+}
+
+export const COMMON_INCIDENT_TYPES: CommonIncidentTypeOption[] = [
+  {
+    id: 'police-report-general',
+    labelEn: 'Police Blotter / General Incident Report',
+    labelFil: 'Opisyal na Police Report / Blotter',
+    category: 'Police Report',
+    descriptionEn: 'General station blotter, formal incident recording, or verified police report statement.',
+    descriptionFil: 'Pangkalahatang blotter, opisyal na rekord ng himpilan, o salaysay ng pulisya.',
+    badgeColor: 'bg-blue-100 text-blue-900 border-blue-300',
+  },
+  {
+    id: 'theft-robbery',
+    labelEn: 'Theft / Robbery (Pagnanakaw)',
+    labelFil: 'Pagnanakaw / Panghoholdap / Hold-up',
+    category: 'Theft / Robbery',
+    descriptionEn: 'Stolen personal belongings, motorcycle theft, shoplifting, burglary, or robbery.',
+    descriptionFil: 'Nanakaw na gamit, salisi, holdap, o sapilitang pagkuha ng ari-arian.',
+    badgeColor: 'bg-rose-100 text-rose-900 border-rose-300',
+  },
+  {
+    id: 'lost-property',
+    labelEn: 'Lost Item / Documents (Affidavit of Loss)',
+    labelFil: 'Nawawalang Gamit o Dokumento (Affidavit of Loss / Blotter)',
+    category: 'Lost Property',
+    descriptionEn: 'Lost driver license, government ID, wallet, cellphone, or important legal certificates.',
+    descriptionFil: 'Nawawalang lisensya, ID, cellphone, pitaka, o opisyal na dokumento.',
+    badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
+  },
+  {
+    id: 'physical-injury',
+    labelEn: 'Physical Injury / Assault (Pananakit)',
+    labelFil: 'Pananakit / Physical Injuries / Bugbugan',
+    category: 'Physical Injury',
+    descriptionEn: 'Physical assault, altercation, battery, or intentional bodily injury.',
+    descriptionFil: 'Pananakit, suntukan, o pinsala sa katawan mula sa ibang tao.',
+    badgeColor: 'bg-red-100 text-red-900 border-red-300',
+  },
+  {
+    id: 'vehicular-traffic',
+    labelEn: 'Vehicular / Traffic Incident',
+    labelFil: 'Insidente o Aksidente sa Sasakyan',
+    category: 'Vehicular Incident',
+    descriptionEn: 'Vehicle collision, traffic damage, or vehicular accident matter.',
+    descriptionFil: 'Banggaan, atrasan, o pinsala sa sasakyan at trapiko.',
+    badgeColor: 'bg-orange-100 text-orange-900 border-orange-300',
+  },
+  {
+    id: 'property-damage',
+    labelEn: 'Property Damage / Malicious Mischief',
+    labelFil: 'Pinsala sa Ari-arian / Vandalism',
+    category: 'Property Damage',
+    descriptionEn: 'Intentional destruction or damage to private property, fence, building, or vehicle.',
+    descriptionFil: 'Sadyang pagsira sa ari-arian, bakod, bahay, o kagamitan.',
+    badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
+  },
+  {
+    id: 'disturbance-threat',
+    labelEn: 'Alarm & Scandal / Threat / Harassment',
+    labelFil: 'Kaguluhan / Pagwawala / Banta / Harassment',
+    category: 'Disturbance / Threat',
+    descriptionEn: 'Neighborhood commotion, verbal death threat, drunken nuisance, or unjust vexation.',
+    descriptionFil: 'Kaguluhan sa kapitbahay, banta sa buhay, panliligalig, o panggugulo.',
+    badgeColor: 'bg-indigo-100 text-indigo-900 border-indigo-300',
+  },
+  {
+    id: 'complaint-grievance',
+    labelEn: 'Complaint / Grievance (Reklamo)',
+    labelFil: 'Pormal na Reklamo / Sumbong',
+    category: 'Complaint',
+    descriptionEn: 'Formal complaint filed against an individual, neighbor, landlord, or establishment.',
+    descriptionFil: 'Pormal na reklamo o sumbong laban sa tao, kumpanya, o establisimyento.',
+    badgeColor: 'bg-teal-100 text-teal-900 border-teal-300',
+  },
+  {
+    id: 'clearance-certification',
+    labelEn: 'Police Clearance / Certification Request',
+    labelFil: 'Sertipikasyon ng Pulisya / Police Record',
+    category: 'Certification',
+    descriptionEn: 'Official police certification, station endorsement, or clearance verification.',
+    descriptionFil: 'Kahilingan para sa opisyal na sertipikasyon, patunay, o beripikasyon mula sa estasyon.',
+    badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+  },
+  {
+    id: 'cyber-fraud',
+    labelEn: 'Cyber Crime / Online Scam / GCash Fraud',
+    labelFil: 'Panloloko sa Internet / Online Scam / GCash',
+    category: 'Cyber Scam',
+    descriptionEn: 'Online fraud, fake seller, phishing, social media account compromise, or scam transfer.',
+    descriptionFil: 'Panloloko sa social media, pekeng nagbebenta, o unauthorized transfer.',
+    badgeColor: 'bg-cyan-100 text-cyan-900 border-cyan-300',
+  },
+  {
+    id: 'other-case',
+    labelEn: 'Other Common Police Case',
+    labelFil: 'Iba Pang Karaniwang Kaso ng Pulisya',
+    category: 'Other Case',
+    descriptionEn: 'Other police concerns requiring official police recording and blotter.',
+    descriptionFil: 'Iba pang usapin o kaganapan na kailangan ng opisyal na tala sa himpilan.',
+    badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
+  },
+];
+
 export type InvestigatorTeamId = 'TEAM_1' | 'TEAM_2';
 
 export type MergeInvestigatorName =
