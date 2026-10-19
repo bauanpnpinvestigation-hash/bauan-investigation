@@ -263,9 +263,9 @@ export function sanitizePersonalInfoForFirestore(
 ): PersonalInformation {
   const safe = pi || ({} as Partial<PersonalInformation>);
   return {
-    firstName: String(safe.firstName || '').trim(),
-    middleName: String(safe.middleName || '').trim(),
-    lastName: String(safe.lastName || '').trim(),
+    firstName: String(safe.firstName || '').trim().replace(/\bSaycon\b/gi, 'Sayco'),
+    middleName: String(safe.middleName || '').trim().replace(/\bSaycon\b/gi, 'Sayco'),
+    lastName: String(safe.lastName || '').trim().replace(/\bSaycon\b/gi, 'Sayco'),
     suffix: String(safe.suffix || '').trim(),
     birthday: String(safe.birthday || '').trim(),
     age:
@@ -674,18 +674,24 @@ export function subscribeToReports(
             d.id.startsWith('mrg_') ||
             String(data.referenceNumber || '').startsWith('MRG-')
         );
-        const computedMergedTitle =
+        const rawMergedTitle =
           data.mergedFileTitle ||
           data.reportData?.mergedFileTitle ||
           (isMerged || sanitizedParties.length > 0
             ? generateMergedFileTitle(data.personalInformation, sanitizedParties)
             : undefined);
+        const computedMergedTitle = rawMergedTitle
+          ? String(rawMergedTitle).replace(/\bSaycon\b/gi, 'Sayco')
+          : undefined;
         const rawInvestigator =
           data.mergedByInvestigator ||
           data.reportData?.mergedByInvestigator ||
           undefined;
-        const validatedInv = rawInvestigator
-          ? validateAndNormalizeInvestigator(rawInvestigator)
+        const cleanedInvestigator = rawInvestigator
+          ? String(rawInvestigator).replace(/\bSaycon\b/gi, 'Sayco')
+          : undefined;
+        const validatedInv = cleanedInvestigator
+          ? validateAndNormalizeInvestigator(cleanedInvestigator)
           : undefined;
 
         loaded.push({
@@ -706,7 +712,7 @@ export function subscribeToReports(
             (data.mergedByTeam as InvestigatorTeamId) ||
             (data.reportData?.mergedByTeam as InvestigatorTeamId) ||
             validatedInv?.teamId,
-          mergedByInvestigator: validatedInv ? validatedInv.normalizedValue : rawInvestigator,
+          mergedByInvestigator: validatedInv ? validatedInv.normalizedValue : cleanedInvestigator,
           sourceReportIds: normalizeFirestoreArray<string>(data.sourceReportIds),
           sourceReferenceNumbers: normalizeFirestoreArray<string>(data.sourceReferenceNumbers),
           attachments: normalizeFirestoreArray<AttachmentItem>(data.attachments).map(

@@ -208,11 +208,7 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
     if (!incidentFields.location.trim()) {
       errs.location = 'Location of Incident is required (Kailangan ang Lugar ng Insidente).';
     }
-    if (!incidentFields.narrative.trim()) {
-      errs.narrative = 'Please provide a narrative or summary of what occurred (Kailangan ang Salaysay o Buod ng Pangyayari).';
-    } else if (incidentFields.narrative.trim().length < 8) {
-      errs.narrative = 'Please provide a more detailed narrative of the incident (Habaan ang salaysay).';
-    }
+    // Narrative / Salaysay is globally optional for citizen public info intake as requested
     setIncidentErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -830,12 +826,13 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                     )}
                   </div>
 
-                  {/* Statement / Narrative */}
+                  {/* Statement / Narrative (Globally Optional for Public Info) */}
                   <div>
                     <label className="block text-xs font-bold text-slate-800 mb-1">
-                      5. Salaysay / Buod ng Pangyayari (Narrative / Police Statement) <span className="text-rose-600">*</span>
+                      5. Salaysay / Buod ng Pangyayari (Narrative / Statement){' '}
+                      <span className="text-slate-500 font-semibold text-xs ml-1">(Opsyonal / Optional)</span>
                       <span className="block text-[11px] font-normal text-slate-500 mt-0.5">
-                        Ilarawan nang buo at malinaw ang buong pangyayari, mga gamit na nawala o nasira, at ano ang naging dahilan.
+                        Maaaring maglagay ng buod ng pangyayari kung nais (opsyonal), o iwanang blangko.
                       </span>
                     </label>
                     <textarea
@@ -843,24 +840,14 @@ export const PublicIntakeWizard: React.FC<PublicIntakeWizardProps> = ({
                       value={incidentFields.narrative}
                       onChange={(e) => {
                         setIncidentFields((prev) => ({ ...prev, narrative: e.target.value }));
-                        if (incidentErrors.narrative) {
-                          setIncidentErrors((prev) => ({ ...prev, narrative: undefined }));
-                        }
                       }}
-                      placeholder="Halimbawa: Noong ganap na 2:30 ng hapon, habang ako ay nasa Bauan Public Market, napansin ko na nawawala ang aking pitaka na naglalaman ng driver's license at mga ID..."
-                      className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-600 leading-relaxed ${
-                        incidentErrors.narrative ? 'border-rose-500 bg-rose-50/30' : 'border-slate-300'
-                      }`}
+                      placeholder="Opsyonal: Ilarawan ang buod ng pangyayari kung may nais idagdag na salaysay, o maaari itong iwanang blangko..."
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-600 leading-relaxed placeholder:text-slate-400"
                     />
                     <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400">
-                      <span>Hindi bababa sa 8 letra (minimum 8 characters)</span>
+                      <span>Opsyonal lamang (Maaaring isumite kahit walang salaysay)</span>
                       <span>{incidentFields.narrative.length} characters</span>
                     </div>
-                    {incidentErrors.narrative && (
-                      <p className="text-xs text-rose-600 font-semibold mt-1">
-                        {incidentErrors.narrative}
-                      </p>
-                    )}
                   </div>
                 </div>
 

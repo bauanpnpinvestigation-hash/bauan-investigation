@@ -28,7 +28,8 @@ export function formatPersonFullName(info?: Partial<PersonalInformation> | null)
   if (info.suffix?.trim() && info.suffix.trim().toLowerCase() !== 'none') {
     parts.push(capitalizeWords(info.suffix.trim()));
   }
-  return parts.join(' ').trim();
+  const full = parts.join(' ').trim();
+  return full.replace(/\bSaycon\b/gi, 'Sayco');
 }
 
 /**
@@ -64,7 +65,8 @@ export function generateMergedFileTitle(
     });
   }
 
-  return `Vehicular Accident - ${names.join(' & ')}`;
+  const title = `Vehicular Accident - ${names.join(' & ')}`;
+  return title.replace(/\bSaycon\b/gi, 'Sayco');
 }
 
 /**
