@@ -3166,14 +3166,12 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                     })
                     .map((att) => {
                     const photoSrc = att.url || att.previewUrl || '';
-                    const isPdf = (att.type || '').toLowerCase().includes('pdf');
+                    const isImage = (att.type || '').startsWith('image/') || /\.(jpe?g|png|webp)$/i.test(att.name || '');
+                    const isWord = (att.type || '').includes('word') || /\.docx?$/i.test(att.name || '');
+                    const isExcel = (att.type || '').includes('excel') || att.type?.includes('spreadsheet') || /\.xlsx?$/i.test(att.name || '');
+                    const isPdf = (att.type || '').toLowerCase().includes('pdf') || /\.pdf$/i.test(att.name || '');
                     const catLabel =
                       att.documentCategoryLabel || getDocumentCategoryLabel(att.documentCategory);
-                    const downloadFileName = `${att.partyReferenceNumber || report.referenceNumber}_${
-                      att.documentCategory || 'DOC'
-                    }_${
-                      (personalInfo.lastName || 'Client').replace(/[^a-zA-Z0-9_-]/g, '_')
-                    }_${att.name || 'Photo.jpg'}`;
                     const itemFolder =
                       att.cloudinaryFolder ||
                       buildClientCloudinaryFolder(
@@ -3190,8 +3188,8 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                         className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50 flex flex-col justify-between shadow-2xs"
                       >
                         <div>
-                          {/* Large Visual Photo Preview */}
-                          {photoSrc && !isPdf ? (
+                          {/* Large Visual Preview (Image vs Document Card) */}
+                          {photoSrc && isImage ? (
                             <div
                               onClick={() => setPreviewAttachment(att)}
                               className="relative group cursor-pointer bg-slate-900 aspect-video w-full overflow-hidden flex items-center justify-center"
@@ -3229,9 +3227,28 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                               </div>
                             </div>
                           ) : (
-                            <div className="aspect-video w-full bg-slate-100 flex flex-col items-center justify-center text-slate-500 p-4">
-                              <File className="w-10 h-10 text-rose-600 mb-1" />
-                              <span className="text-xs font-bold text-slate-700">{att.name}</span>
+                            <div className="aspect-video w-full bg-slate-100 flex flex-col items-center justify-center text-slate-600 p-4 border-b border-slate-200">
+                              {isWord ? (
+                                <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center shadow-xs mb-1.5 font-black text-xs">
+                                  DOC
+                                </div>
+                              ) : isExcel ? (
+                                <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shadow-xs mb-1.5 font-black text-xs">
+                                  XLS
+                                </div>
+                              ) : isPdf ? (
+                                <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-800 flex items-center justify-center shadow-xs mb-1.5 font-black text-xs">
+                                  PDF
+                                </div>
+                              ) : (
+                                <File className="w-10 h-10 text-slate-600 mb-1.5" />
+                              )}
+                              <span className="text-xs font-bold text-slate-900 truncate max-w-full px-2" title={att.name}>
+                                {att.name}
+                              </span>
+                              <span className="text-[10px] font-semibold text-slate-500 mt-0.5">
+                                {isWord ? 'Microsoft Word Document' : isExcel ? 'Microsoft Excel Spreadsheet' : isPdf ? 'Adobe PDF Document' : 'Attached File'}
+                              </span>
                             </div>
                           )}
 
@@ -3262,7 +3279,7 @@ export const AdminReportDetail: React.FC<AdminReportDetailProps> = ({
                         {/* Action Buttons: View & Download & Delete */}
                         <div className="px-3.5 py-2.5 bg-white border-t border-slate-200 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {photoSrc && !isPdf && (
+                            {photoSrc && isImage && (
                               <button
                                 type="button"
                                 onClick={() => setPreviewAttachment(att)}

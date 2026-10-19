@@ -33,8 +33,17 @@ interface FileUploadDropzoneProps {
   uploadButtonLabel?: string;
 }
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const ALLOWED_EXTENSIONS = '.jpg, .jpeg, .png, .webp, .pdf';
+const ALLOWED_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+];
+const ALLOWED_EXTENSIONS = '.jpg, .jpeg, .png, .webp, .pdf, .doc, .docx, .xls, .xlsx';
 
 export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
   attachments,
@@ -191,8 +200,13 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
       const file = files[i];
 
       // Validate Type
-      if (!ALLOWED_TYPES.includes(file.type) && !file.type.startsWith('image/')) {
-        setErrorMsg(`Unsupported file type: ${file.name}. Only JPEG, PNG, WEBP, and PDF files are allowed.`);
+      const isAllowed =
+        ALLOWED_TYPES.includes(file.type) ||
+        file.type.startsWith('image/') ||
+        file.name.match(/\.(docx?|xlsx?|pdf|jpe?g|png|webp)$/i);
+
+      if (!isAllowed) {
+        setErrorMsg(`Unsupported file type: ${file.name}. Only Images, PDF, Word (.doc/.docx), and Excel (.xls/.xlsx) files are allowed.`);
         setIsUploading(false);
         return;
       }
